@@ -12,9 +12,13 @@ the safety net that has to exist *before* any refactoring is attempted.
 ## Why these tools exist
 
 The codebase is one 21,395-line `index.html` containing 832 top-level
-declarations, of which **375 form a single strongly-connected component** hanging
-off two mutable globals (`W` is referenced 128 times, `bodies` 115 times, and
-both are read/written across the entire file).
+declarations. Its main script (`src/10-app.js`) has a single strongly-connected
+component of **165 functions**, which together reference ~211 mutable globals —
+about **375 declarations** in total (that combined figure was previously
+mis-stated as a 375-node SCC; see MODULARIZATION.md §1.2). The coupling is
+diffuse rather than hub-based: removing the largest single function only shrinks
+the SCC from 165 to 144. The worst-referenced globals are `grab` (568
+references), `W` (409) and `bodies` (372) — all read/written across the file.
 
 That has two consequences this tooling exists to handle:
 
@@ -140,6 +144,13 @@ behaviour and needs investigating.
 These limits are deliberate: the scenarios target the **simulation core**, which
 is what a modularization of the physics is most likely to break.
 
+**Still uncovered after the 2026-10 additions** (be aware of these before a
+refactor): the UI, rendering, the boss/black-hole state machine, trails, panels,
+formula assembly, rope, and the belt's traction behaviour. Of the ten largest
+functions, `renderParamPanel`, `buildMatterBody`, `bossBuildPlat`, `refreshHover`
+and `applyParam` have no direct scenario coverage at all. See the warning in the
+Scenarios section for why "the suite is green" is not by itself evidence.
+
 ---
 
 ## Scenarios
@@ -153,8 +164,26 @@ is what a modularization of the physics is most likely to break.
 | `circle-roll` | the analytic circle collision shell |
 | `rod-static-anchors` | rods must not drift when unanchored |
 | `belt-static` | devices stay static (a belt must not fall) |
+| `rod-anchored-swing` | a rod pinned to a host swings without stretching (R106 length conservation) |
+| `spring-hanging-mass` | a ball on a spring oscillates to equilibrium |
 
 Add a scenario whenever you fix a physics bug — that is how the net grows.
+
+> **Read this before trusting the net.** The last two scenarios were added in
+> 2026-10 to close a **severe blind spot**, and the story matters more than the
+> entries. The original 7 scenarios could not execute `rodSyncAnchors` at all:
+> `rod-static-anchors` builds its rod via `makeRod(400,300,0,0)`, which leaves
+> `B.anc = [null,null]`, so `rodSyncAnchors` returns at its second line
+> (`if(!B.anc[0] && !B.anc[1]) return false;`, src/10-app.js:1518) and its
+> ~368-line body never runs. Injecting `if(1)return false;` at the top of that
+> function left the suite **7/7 green**. There was also no spring scenario at all.
+>
+> After adding the two scenarios, the same injection fails immediately with
+> precise deltas.
+>
+> **The lesson: coverage is not "how many scenarios", it is "does the target code
+> actually execute".** When you add a scenario, verify it drives the function you
+> mean to protect — a green run over a function that early-returns proves nothing.
 
 ---
 
@@ -166,12 +195,16 @@ change the harness:
 - **`build --check` is byte-exact.** `src/` reproduces the committed
   `index.html` exactly; splitting fresh and rebuilding leaves `index.html`
   untouched (`git diff` empty).
-- **Runs are reproducible.** Three consecutive independent full runs: 7/7 pass.
+- **Runs are reproducible.** Three consecutive independent full runs: 9/9 pass.
+  (The two anchored scenarios were each verified deterministic across three
+  independent runs before their baselines were recorded.)
 - **The net catches real regressions.** Changing `GRAV` from 2600 to 2500 (a
   ~4 % change) fails 4/7 scenarios with precise deltas
-  (`vy 1300 → 1250`, i.e. exactly `ΔGRAV/60`).
+  (`vy 1300 → 1250`, i.e. exactly `ΔGRAV/60`). Injecting `if(1)return false;`
+  into `rodSyncAnchors` fails `rod-anchored-swing`; the same into `stepSprings`
+  fails `spring-hanging-mass`.
 - **The net does not fire spuriously.** A comment-only change to `10-app.js`
-  passes 7/7.
+  passes all scenarios.
 
 ---
 

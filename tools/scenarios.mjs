@@ -98,4 +98,65 @@ export const SCENARIOS = [
     },
     steps: [{ n: 60 }, { n: 120 }],
   },
+
+  /* ------------------------------------------------------------------------
+   * ANCHORED ROD + SPRING
+   *
+   * WHY THESE TWO EXIST (added after the blind-spot finding)
+   * -------------------------------------------------------
+   * `rod-static-anchors` above is NOT sufficient to cover the rod subsystem.
+   * It builds its rod with `makeRod(400, 300, 0, 0)`, which leaves
+   * `B.anc = [null, null]` — and `rodSyncAnchors` (src/10-app.js:1518) opens with
+   * `if(!B.anc[0] && !B.anc[1]) return false;`. So that scenario only ever
+   * exercises the early-return guard: the ~368-line constraint body never runs.
+   * Verified by experiment — `if(1)return false;` injected at the top of
+   * `rodSyncAnchors` still passed 7/7, because no scenario ever anchors a rod.
+   *
+   * These scenarios anchor for real, via the same entry point the UI uses
+   * (`rodTryAnchor` / `springTryAnchor`), so the constraint solver is on the
+   * hot path. The rod case also pins the R106 length-conservation invariant
+   * (`len` must stay exactly 170 while swinging) — the exact class of bug that
+   * motivated that fix.
+   *
+   * Both were verified deterministic across three consecutive independent runs.
+   * ------------------------------------------------------------------------ */
+
+  {
+    id: 'rod-anchored-swing',
+    doc: 'A rod pinned at one end to a fixed host swings under gravity without stretching. ' +
+         'Covers rodSyncAnchors beyond its no-anchor early return (R106 length conservation).',
+    setup: () => {
+      // Fixed host: its lower face sits at y = 300 + 9 = 309 (GROUND_TH/2 == 9).
+      makeGround(420, 300, 200);
+      const rod = makeRod(420, 394, 0, 0);
+      // Stand the rod upright so its upper end lands exactly on the host's lower face
+      // (centre y 394 +/- half-length 85 => ends at y 309 and y 479).
+      rod.th = Math.PI / 2;
+      rodTryAnchor(rod);           // snaps end [1] (y=309) onto the host
+      rod.vx = 300;                // kick it so the joint solver actually works
+      return true;
+    },
+    steps: [{ n: 30 }, { n: 30 }, { n: 60 }, { n: 120 }],
+  },
+
+  {
+    id: 'spring-hanging-mass',
+    doc: 'A ball hangs from a fixed host on a spring and oscillates to equilibrium. ' +
+         'Covers stepSprings anchor-following (no spring scenario existed before).',
+    setup: () => {
+      makeGround(420, 200, 200);   // lower face at y = 209
+      // 16-gon == the analytic circle shell, same construction as `circle-roll`.
+      mkBoundary(
+        Array.from({ length: 16 }, (_, i) => {
+          const a = (i / 16) * Math.PI * 2;
+          return [420 + Math.cos(a) * 30, 420 + Math.sin(a) * 30];
+        }),
+        { shape: 'circle', rad: 30, closed: true }
+      );
+      const spr = makeSpring(420, 209, 420, 390);
+      springTryAnchor(spr);        // end [0] -> host, end [1] -> ball
+      return true;
+    },
+    steps: [{ n: 60 }, { n: 60 }, { n: 120 }],
+  },
 ];

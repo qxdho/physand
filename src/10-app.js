@@ -1,5 +1,11 @@
 
-var ctx2d=document.createElement('canvas').getContext('2d');
+/* ★2026-10：`getContext('2d')` 在极端环境下会返回 null（内存压力、canvas 被策略禁用、
+   WebView 配置异常等）。原代码不检查，`met()` 里 `ctx2d.font=...` 会抛一个与本产品毫无
+   关系的 TypeError，整个应用在第 2 行就死掉、且报错信息毫无指向性。
+   这里给一个**惰性降级**：拿不到 2D context 时，`met()` 退回按字号估算的字形度量
+   （宽 ≈ 0.6em、上下均分），页面照常可用 —— 只是字母间距/命中框略有偏差，
+   远比白屏好。正常浏览器里 ctx2d 存在，这条分支永不执行，行为逐字节不变。 */
+var ctx2d=(function(){try{return document.createElement('canvas').getContext('2d');}catch(e){return null;}})();
 var F=48,GRAV=2600,AACC=1300,RM=150,MT={},RAISE=F*0.3;
 var B_FIELD_RANGE=320,BZ_DIR=1,Q_OMEGA=2.4,A_FORCE=900,Q_FORCE=2.2;
 /* ★R132-9zq：带电 **W 体**（矩形/圆形/三角形器件）在场里的施力系数。
@@ -88,6 +94,17 @@ function met(ch,size){
   size=size||F;
   var key=ch+'@'+size;
   if(MT[key])return MT[key];
+  /* ★2026-10 降级分支：没有 2D context（见文件开头 ctx2d 的说明）时按字号估算，
+     保证应用能起来。有 context 时走的还是原来那条路，一字未改。 */
+  if(!ctx2d){
+    /* 与下面真实分支**同构**：先用同一套公式算出 bl/top/bot，只把度量换成按字号的估算。
+       il/ir 直接取 ±w/2（等于真实分支里 ink 度量缺失时的回退值）。 */
+    var ia0=size*0.70, id0=size*0.20;       // 估算的墨迹上/下沿
+    var w0=size*0.60;                        // 估算的字宽
+    var bl0=(size-(ia0+id0))/2+ia0;
+    MT[key]={top:bl0-ia0-size/2, bot:bl0+id0-size/2, w:w0, il:-w0/2, ir:w0/2};
+    return MT[key];
+  }
   ctx2d.font='italic '+size+'px Georgia,"Times New Roman",serif';
   var q=ctx2d.measureText(ch);
   var fba=q.fontBoundingBoxAscent||q.actualBoundingBoxAscent||60;
@@ -1486,18 +1503,6 @@ function springAnchorOffset(B,i){
  *  三根 36px…）⇒ Gauss-Seidel 迭代相互放大 ⇒ 装配发散飞出。
  *  修：给每个宿主**每子步一个修正总预算 ROD_PULL_MAX**，多杆按先到先得分配（超出即按比例缩减）。
  *  单杆本来 ≤12px ⇒ 行为不变；多杆不再叠加。 */
-function rodPbdRemain(h){
-  if(!h||!h.mb)return ROD_PULL_MAX;
-  var _ts=(MW&&MW.engine)?MW.engine.timing.timestamp:0;
-  if(h._pbdTs!==_ts){h._pbdTs=_ts;h._pbdAcc=0;}
-  return Math.max(0,ROD_PULL_MAX-h._pbdAcc);
-}
-function rodPbdAdd(h,amt){
-  if(!h)return;
-  var _ts=(MW&&MW.engine)?MW.engine.timing.timestamp:0;
-  if(h._pbdTs!==_ts){h._pbdTs=_ts;h._pbdAcc=0;}
-  h._pbdAcc+=amt;
-}
 /* ★R131-17：**多杆共享宿主的 PBD 修正预算**——同一子步多根杆各给宿主一次修正
  *  （每根上限 12px）叠加 ⇒ 迭代放大发散（高中杆连球飞出实证）。每宿主每子步
  *  总修正 ≤ ROD_PULL_MAX，多杆先到先得、超出按比例缩减；单杆本来 ≤12px ⇒ 不变。 */
@@ -5258,6 +5263,22 @@ function initWorld(B){
   }
 }
 var DD=document,dpr=window.devicePixelRatio||1,cvx=cv.getContext('2d');
+/* ★2026-10：主画布的 2D context 是**硬依赖**（没有它什么都画不出来），所以这里不做降级，
+   但**必须失败得能看懂**。原代码不检查：拿不到 context 时，第一个 `cvx.setTransform(...)`
+   （约 11,460 行）会抛 "Cannot read properties of null"，用户/贡献者完全看不出是环境问题。
+   这里补一条明确提示，同时尽量把错误暴露在右上角而不是只在 console 里。 */
+if(!cvx){
+  var _ctxMsg='physand: 无法获取 canvas 2D 上下文（浏览器可能禁用了 canvas，或内存不足）。'
+             +'页面无法渲染，请换用支持 canvas 的浏览器 / 关闭释放内存后重试。';
+  try{console.error(_ctxMsg);}catch(e){}
+  try{
+    var _eb=document.createElement('div');
+    _eb.style.cssText='position:fixed;z-index:2147483647;left:0;right:0;top:0;padding:12px 16px;'
+      +'background:#b3261e;color:#fff;font:14px/1.5 system-ui,sans-serif;text-align:center;';
+    _eb.textContent=_ctxMsg;
+    (document.body||document.documentElement).appendChild(_eb);
+  }catch(e){}
+}
 var freeL=[],orbHover=null,orbDrag=null,orbLast=null,cur=null;
 var formulas=[];
 var dockSep=null,merging=false;
@@ -17258,10 +17279,16 @@ function recPayload(){
   var payload={v:2,kind:'sandbox-rec',savedAt:new Date().toISOString(),
     meta:{},env:recEnv(),init:REC.init,dropped:REC.drop,
     initT:(REC.init?REC.init.t:null),frames:REC.frames,events:REC.events};
-  ['W','H','groundY','PX_PER_M','GRAV','PHYS_MODE','SPR_KS_DEF','SPR_K_MAX','SPR_DAMP',
-   'SPR_SPAWN_LEN','BALL_REST','CIRCLE_SIDES','BND_INK'].forEach(function(k){
-    try{payload.meta[k]=eval(k);}catch(e){payload.meta[k]=null;}
-  });
+  /* ★2026-10 去 eval：原来这里是 `payload.meta[k]=eval(k)`。这些名字全是**本文件的顶层
+   *  全局变量**，用一个显式查找表读取即可，语义完全相同（值相同、`undefined` 也照样落成
+   *  `null`），但不再需要 `eval` —— 免去 CSP 违规、免去「字符串当代码跑」的审计噪音，
+   *  也让打包器/静态检查能看见这些引用。新增要录进 meta 的全局，请在下面表里加一行。 */
+  var _recMeta={'W':W,'H':H,'groundY':groundY,'PX_PER_M':PX_PER_M,'GRAV':GRAV,
+    'PHYS_MODE':PHYS_MODE,'SPR_KS_DEF':SPR_KS_DEF,'SPR_K_MAX':SPR_K_MAX,'SPR_DAMP':SPR_DAMP,
+    'SPR_SPAWN_LEN':SPR_SPAWN_LEN,'BALL_REST':BALL_REST,'CIRCLE_SIDES':CIRCLE_SIDES,'BND_INK':BND_INK};
+  for(var _mk in _recMeta){
+    if(Object.prototype.hasOwnProperty.call(_recMeta,_mk))payload.meta[_mk]=_recMeta[_mk];
+  }
   return payload;
 }
 function recDump(){

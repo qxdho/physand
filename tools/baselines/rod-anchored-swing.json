@@ -1,0 +1,138 @@
+{
+ "id": "rod-anchored-swing",
+ "doc": "A rod pinned at one end to a fixed host swings under gravity without stretching. Covers rodSyncAnchors beyond its no-anchor early return (R106 length conservation).",
+ "snaps": [
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 300,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "T",
+     "dead": 0,
+     "x": 500.401,
+     "y": 336.639,
+     "vx": 49.264,
+     "vy": -133.984,
+     "a": 0.331,
+     "w": -1.679,
+     "len": 170
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 300,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "T",
+     "dead": 0,
+     "x": 502.02,
+     "y": 286.622,
+     "vx": -16.759,
+     "vy": -66.838,
+     "a": -0.266,
+     "w": -0.811,
+     "len": 170
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 300,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "T",
+     "dead": 0,
+     "x": 485.207,
+     "y": 254.456,
+     "vx": -10.238,
+     "vy": -12.671,
+     "a": -0.697,
+     "w": -0.192,
+     "len": 170
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 300,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "T",
+     "dead": 0,
+     "x": 477.787,
+     "y": 246.659,
+     "vx": -0.67,
+     "vy": -0.634,
+     "a": -0.823,
+     "w": -0.011,
+     "len": 170
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

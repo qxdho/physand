@@ -116,7 +116,17 @@ for (const sc of selected) {
 }
 
 if (RECORD) {
-  console.log(`\nbaselines written to tools/baselines/ (${selected.length} scenarios)`);
+  console.log(`\nbaselines written to tools/baselines/ (${selected.length - failures} recorded)`);
+  /* ★2026-10: 原来这里无条件 `process.exit(0)` —— 即使某个场景抛错/页面报错、failures>0，
+     也照样报成功。后果很坏：在坏掉的页面上 `--record` 会把**错的**状态录成新基线，
+     而调用者看到退出码 0 以为一切正常，从此基线永久错下去。
+     现在：有失败就以非零退出，并明确说明「不要把这次结果当成基线」。 */
+  if (failures) {
+    console.error(`\n✗ ${failures}/${selected.length} scenario(s) FAILED while recording — `
+      + `baselines for those scenarios were NOT written.`);
+    console.error('  Do not treat this run as a new baseline; fix the failure first.');
+    process.exit(1);
+  }
   process.exit(0);
 }
 if (failures) {

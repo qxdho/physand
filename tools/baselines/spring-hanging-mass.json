@@ -1,0 +1,150 @@
+{
+ "id": "spring-hanging-mass",
+ "doc": "A ball hangs from a fixed host on a spring and oscillates to equilibrium. Covers stepSprings anchor-following (no spring scenario existed before).",
+ "snaps": [
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 436.442,
+     "vx": 0,
+     "vy": -63.21,
+     "a": 0,
+     "w": 0,
+     "m": 3.273
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 307.721,
+     "vx": 0,
+     "vy": 0,
+     "a": 1.571,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 197.442,
+     "ks": 250
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 427.053,
+     "vx": 0,
+     "vy": 5.165,
+     "a": 0,
+     "w": 0,
+     "m": 3.273
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 303.026,
+     "vx": 0,
+     "vy": 0,
+     "a": 1.571,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 188.053,
+     "ks": 250
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 429.539,
+     "vx": 0,
+     "vy": -9.741,
+     "a": 0,
+     "w": 0,
+     "m": 3.273
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 304.27,
+     "vx": 0,
+     "vy": 0,
+     "a": 1.571,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 190.539,
+     "ks": 250
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

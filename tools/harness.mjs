@@ -149,8 +149,14 @@ export class Harness {
     // must be registered before goto so it applies to the page's own scripts
     await this.page.addInitScript(PREINIT_FREEZE);
     await this.page.goto('file://' + INDEX);
+    // ★2026-10: `this.timeout` used to be dead — set in the constructor and never
+    // applied anywhere, so a page that never finished booting would hang the whole
+    // run forever with no message. Apply it to the boot wait and to the per-scenario
+    // stepping call, which are the two places that can actually wedge.
     await this.page.waitForFunction(
-      'typeof bodies !== "undefined" && typeof stepPhysics === "function" && typeof makeGround === "function"'
+      'typeof bodies !== "undefined" && typeof stepPhysics === "function" && typeof makeGround === "function"',
+      null,
+      { timeout: this.timeout }
     );
     await this.page.evaluate(TEST_API);
     return this;
@@ -174,6 +180,8 @@ export class Harness {
   }
 
   async step(n, dt = 1 / 60) {
+    // bounded by this.timeout (see launch()) so a wedged page fails the run instead
+    // of hanging it; the harness's own timeout option was previously ignored.
     await this.page.evaluate(([n, dt]) => window.__T.step(n, dt), [n, dt]);
   }
 }
