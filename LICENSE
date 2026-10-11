@@ -1,6 +1,7 @@
 MIT License
 
-Copyright (c) 2026 Da0Mine
+Copyright (c) 2026 Da0Mine — original work: https://github.com/Da0Mine/physics-sandbox
+Copyright (c) 2026 physand contributors — refactor: source split, build pipeline, replay tests
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

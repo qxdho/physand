@@ -1,0 +1,105 @@
+{
+ "id": "shape-rest-on-ground",
+ "doc": "Drawn square falls onto a fixed ground and comes to rest. Catches collision/solver changes.",
+ "snaps": [
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 900,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 440,
+     "y": 507.708,
+     "vx": 0,
+     "vy": 1300,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 900,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 440,
+     "y": 587.355,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 900,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 440,
+     "y": 587.355,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

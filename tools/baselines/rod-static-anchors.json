@@ -1,0 +1,72 @@
+{
+ "id": "rod-static-anchors",
+ "doc": "A rod spawned with no anchors must not drift. Catches rod anchor/resync regressions.",
+ "snaps": [
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 900,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "T",
+     "dead": 0,
+     "x": 400,
+     "y": 300,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": null,
+     "len": 170
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 900,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "T",
+     "dead": 0,
+     "x": 400,
+     "y": 300,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": null,
+     "len": 170
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

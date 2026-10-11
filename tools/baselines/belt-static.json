@@ -1,0 +1,46 @@
+{
+ "id": "belt-static",
+ "doc": "A conveyor belt is a fixed device: it must not fall or drift under gravity.",
+ "snaps": [
+  {
+   "n": 1,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 400,
+     "y": 500,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "fx": 1
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 1,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 400,
+     "y": 500,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "fx": 1
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

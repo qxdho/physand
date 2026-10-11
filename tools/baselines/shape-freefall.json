@@ -1,0 +1,63 @@
+{
+ "id": "shape-freefall",
+ "doc": "A drawn closed square free-falls under gravity. Catches integrator/gravity changes.",
+ "snaps": [
+  {
+   "n": 1,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 440,
+     "y": 262.604,
+     "vx": 0,
+     "vy": 650,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 1,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 440,
+     "y": 507.708,
+     "vx": 0,
+     "vy": 1300,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 1,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 440,
+     "y": 607.688,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

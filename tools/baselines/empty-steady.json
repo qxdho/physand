@@ -1,0 +1,18 @@
+{
+ "id": "empty-steady",
+ "doc": "Empty world: nothing should appear or move. Catches startup/global-init damage.",
+ "snaps": [
+  {
+   "n": 0,
+   "nfl": 0,
+   "bs": [],
+   "fl": []
+  },
+  {
+   "n": 0,
+   "nfl": 0,
+   "bs": [],
+   "fl": []
+  }
+ ]
+}

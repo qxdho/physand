@@ -1,0 +1,17 @@
+{
+  "name": "physics-sandbox-tools",
+  "private": true,
+  "type": "module",
+  "description": "Build + headless replay harness for the single-file physics sandbox. Development only; never shipped.",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node build.mjs --check",
+    "split": "node split.mjs",
+    "replay": "bash run.sh replay.mjs",
+    "record": "bash run.sh replay.mjs --record",
+    "list": "node replay.mjs --list"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.0"
+  }
+}

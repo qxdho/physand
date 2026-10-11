@@ -1,0 +1,15 @@
+# --- development only; none of this ships -------------------------------
+# The product is index.html. Everything below exists to build/verify it.
+
+# headless Chromium + its shared libraries (large; re-fetchable via
+# tools/fetch-syslibs.sh and `npx playwright install chromium`)
+.browsers/
+.syslibs/
+
+# node deps for the tooling
+node_modules/
+tools/node_modules/
+
+# scratch
+.analysis/
+*.log
