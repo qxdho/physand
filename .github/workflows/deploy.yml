@@ -1,0 +1,69 @@
+name: Deploy to GitHub Pages
+
+# Publishes the Vite build. Since the project moved from "download one HTML
+# file" to a real web app, this workflow IS the user-facing distribution
+# channel — without it there is nothing to link people to.
+#
+# Requires: Settings -> Pages -> Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; queue instead of cancelling so a run that is
+# already publishing is not cut in half.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Deploying a build whose generated files disagree with src/ would ship
+      # a subtly different app than the one the replay suite validated.
+      - name: Check generated files are fresh
+        run: npm run gen:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # `npm run build` runs tsc --noEmit && vite build
+      - name: Build
+        run: npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

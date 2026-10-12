@@ -28,6 +28,7 @@ import appSource from '../src/10-app.js?raw';
 import bossSource from '../src/90-boss.js?raw';
 import { LEGACY_GLOBAL_NAMES } from './core/legacy-globals.generated';
 import { evaluateAsClassicScript, assertGlobalsPresent } from './core/module-bridge';
+import { world } from './core/world';
 
 /**
  * Inject the static markup. The legacy page was a flat list of <div>s directly
@@ -39,6 +40,57 @@ function installStaticDom(): void {
   const root = document.getElementById('app-root');
   if (!root) throw new Error('physand: #app-root missing from index.html');
   root.innerHTML = bodyHtml + midHtml;
+}
+
+/**
+ * Point the World read facade at the legacy globals.
+ *
+ * MUST be called after the app is evaluated (it reads live globals) but the
+ * properties are getters, so it must NOT be called before — `bodies` etc. are
+ * created during app evaluation and reassigned at runtime.
+ *
+ * Each accessor is defensive by design: the recorder calls these from
+ * `recEnv()`, which is explicitly written to tolerate missing state and emit
+ * null rather than throw. A recording must never be able to crash the app the
+ * user is trying to report a bug in, so we keep that tolerance here.
+ */
+function attachWorldReadFacade(): void {
+  const g = globalThis as unknown as Record<string, any>;
+  world.attachLegacySource({
+    get bodies() {
+      return g.bodies ?? null;
+    },
+    get freeLetters() {
+      return g.freeL ?? null;
+    },
+    get canvasWidth() {
+      return g.W ?? 0;
+    },
+    get canvasHeight() {
+      return g.H ?? 0;
+    },
+    get matter() {
+      return g.MW ?? null;
+    },
+    get gravity() {
+      return g.GRAV ?? 0;
+    },
+    get pixelsPerMetre() {
+      return g.PX_PER_M ?? 0;
+    },
+    get groundY() {
+      return g.groundY ?? 0;
+    },
+    get physMode() {
+      return g.PHYS_MODE ?? null;
+    },
+    get toolMode() {
+      return g.TOOL ? g.TOOL.mode + (g.TOOL.shape ? '/' + g.TOOL.shape : '') : null;
+    },
+    get uiMode() {
+      return g.UI_MODE ?? null;
+    },
+  } as never);
 }
 
 function boot(): void {
@@ -64,6 +116,12 @@ function boot(): void {
 
   // Fail loudly rather than rendering a blank page if anything did not load.
   assertGlobalsPresent();
+
+  // Stage 5: wire the typed read facade onto the now-live globals.
+  attachWorldReadFacade();
+
+  // Expose for the replay harness and for phase-B verification.
+  (globalThis as unknown as Record<string, unknown>).__world = world;
 }
 
 boot();

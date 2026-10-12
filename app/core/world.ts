@@ -108,7 +108,66 @@ export class BodyList implements Iterable<Body> {
 /**
  * The world. Phase A exposes only what already exists globally, so a call site
  * can be migrated by swapping `bodies` -> `world.bodies` with no other change.
+ *
+ * PHASE B — READ FACADE
+ * ---------------------
+ * Phase B migrates one subsystem at a time onto explicit accessors instead of
+ * bare globals. The first (and lowest-risk) consumer is the recorder, whose
+ * external coupling is tiny and measurable: `recSnap`/`recEnv` reach for just
+ * ~10 globals across ~980 lines.
+ *
+ * Rather than rewrite all 372 `bodies` references at once — which history shows
+ * is how refactors break physics — we give the recorder a *snapshot read* API.
+ * The recorder only ever READS world state (it never drives the simulation), so
+ * this is a genuinely safe seam: the blast radius of a mistake is a malformed
+ * recording, caught immediately by the replay suite.
+ *
+ * See `attachLegacySource` for how these getters are wired to the still-global
+ * legacy implementation during the migration.
  */
+
+/** Read-only view of the app state the recorder needs. */
+export interface WorldReadView {
+  /** Live body collection. */
+  readonly bodies: BodyList;
+  /** Free (unmerged) letters. */
+  readonly freeLetters: readonly unknown[];
+  /** Canvas width/height in CSS pixels. */
+  readonly canvasWidth: number;
+  readonly canvasHeight: number;
+  /** Matter engine handle, or null before boot. */
+  readonly matter: unknown;
+  /** Simulation constants, read at snapshot time. */
+  readonly gravity: number;
+  readonly pixelsPerMetre: number;
+  readonly groundY: number;
+  readonly physMode: string | null;
+  /** Current tool mode, e.g. "pen" or "pen/circle". */
+  readonly toolMode: string | null;
+  readonly uiMode: string | null;
+}
+
+/**
+ * Bridge to the legacy globals during the migration.
+ *
+ * The legacy app is still the implementation; this only gives typed, named
+ * access to it. When a subsystem is fully migrated, its entry here is deleted
+ * and replaced by a real field on World — that is the signal a seam is closed.
+ */
+interface LegacySource {
+  bodies: BodyList | null;
+  freeLetters: readonly unknown[] | null;
+  canvasWidth?: number;
+  canvasHeight?: number;
+  matter: unknown;
+  gravity: number;
+  pixelsPerMetre: number;
+  groundY: number;
+  physMode: string | null;
+  toolMode: string | null;
+  uiMode: string | null;
+}
+
 export class World {
   readonly bodies = new BodyList();
 
@@ -116,6 +175,71 @@ export class World {
   canvasWidth = 0;
   canvasHeight = 0;
   matter: unknown = null;
+
+  /**
+   * Populated by `attachLegacySource` while the legacy globals are still the
+   * real implementation. Removed in phase C.
+   */
+  private legacy: LegacySource | null = null;
+
+  /**
+   * Point the read facade at the legacy globals.
+   *
+   * Called once from the bridge right after the legacy app is evaluated. Using
+   * a getter-based object (rather than copying values) matters: `GRAV` and
+   * `bodies` are reassigned/ mutated at runtime, so a snapshot copy would go
+   * stale and the recorder would silently capture wrong values.
+   */
+  attachLegacySource(src: LegacySource): void {
+    this.legacy = src;
+  }
+
+  /**
+   * The recorder's read view.
+   *
+   * Every field is guarded: the recorder runs in environments where some
+   * globals may not exist yet (and `recEnv` is explicitly written to tolerate
+   * that — it wraps each field in try/catch and emits null). We preserve that
+   * tolerance rather than throwing, because a recording must never be able to
+   * crash the app the user is trying to report a bug in.
+   */
+  readView(): WorldReadView {
+    const L = this.legacy;
+    const bodies = L?.bodies ?? this.bodies;
+    return {
+      bodies,
+      get freeLetters() {
+        return L?.freeLetters ?? [];
+      },
+      get canvasWidth() {
+        return L ? (L.canvasWidth ?? 0) : 0;
+      },
+      get canvasHeight() {
+        return L ? (L.canvasHeight ?? 0) : 0;
+      },
+      get matter() {
+        return L?.matter ?? null;
+      },
+      get gravity() {
+        return L?.gravity ?? 0;
+      },
+      get pixelsPerMetre() {
+        return L?.pixelsPerMetre ?? 0;
+      },
+      get groundY() {
+        return L?.groundY ?? 0;
+      },
+      get physMode() {
+        return L?.physMode ?? null;
+      },
+      get toolMode() {
+        return L?.toolMode ?? null;
+      },
+      get uiMode() {
+        return L?.uiMode ?? null;
+      },
+    } as WorldReadView;
+  }
 
   /** Create a body and register it — the single add path (legacy `BODY()`). */
   createBody(init: Partial<Body> & { x: number; y: number }): Body {
