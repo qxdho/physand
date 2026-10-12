@@ -9975,17 +9975,39 @@ function paramDefVal(B,spec){
   if(spec.key==='wbounc')return wBouncDef(B);
   return spec.def;
 }
+/* ★★2026-10（阶段 B）：面板刷新的两个小助手。原代码里「刷新面板」这件事被 9 处调用点
+ *  各自重复实现，每处都要自己记住「有没有开面板」和「用哪个函数刷新」。门面把这两件事
+ *  收成一个动作：没开面板时它就是 no-op。
+ *  ⚠ 门面缺失时回退到裸实现，保证单独 eval 本文件时也能工作。 */
+function _panelRefresh(){
+  var F=(typeof globalThis!=='undefined')?globalThis.__panelFacade:null;
+  if(F){F.refresh();return;}
+  if(paramBody)renderParamPanel();
+}
+function _panelRefreshAndClamp(){
+  var F=(typeof globalThis!=='undefined')?globalThis.__panelFacade:null;
+  if(F){F.refreshAndClamp();return;}
+  if(paramBody){renderParamPanel();if(typeof clampParamPanel==='function')clampParamPanel();}
+}
 function paramV(B,id){
   var spec=PARAM_DEFS[id];
+  /* ★★2026-10（阶段 B）：`paramLetter` 改经**面板门面**读取。
+   *  为什么它是真正的共享状态：授予型参数（v/a/q/t）的值**存在字符上**还是**存在宿主体上**，
+   *  取决于面板正在编辑的是不是一个字符 —— 这是 R132-9d 的 dock 模板规则，
+   *  面板与参数读写两条路必须看到**同一个**字符对象。用局部别名 `_pl`，
+   *  下面十来行读取逻辑一字未动。
+   *  ⚠ 门面缺失时回退到裸全局，保证单独 eval 本文件时也能工作。 */
+  var _pf=(typeof globalThis!=='undefined')?globalThis.__panelFacade:null;
+  var _pl=_pf?_pf.targetLetter():paramLetter;
   /* ★★R131-42b：**新参数的读取分支曾整体缺失**（tscale/vang/qcharge/wcharge/aang 全无）
    *  ⇒ 面板显示的一直是 spec.def、与真实值不同步（用户看到的"改了没反应"就是这个）。
    *  这里统一补齐：Δt 全局量；v/a/q 的赋值存在字符（paramLetter）或宿主字段上。 */
   if(id==='tscale')return TIME_SCALE;
-  if(id==='vsize')return (B&&B.vGive!=null)?B.vGive:((paramLetter&&paramLetter.vGive!=null)?paramLetter.vGive:spec.def);
-  if(id==='vang')return (B&&B.vAng!=null)?B.vAng:((paramLetter&&paramLetter.vAng!=null)?paramLetter.vAng:spec.def);
-  if(id==='asize')return (B&&B.aGive!=null)?B.aGive:((paramLetter&&paramLetter.aGive!=null)?paramLetter.aGive:spec.def);
-  if(id==='aang')return (B&&B.aAng!=null)?B.aAng:((paramLetter&&paramLetter.aAng!=null)?paramLetter.aAng:spec.def);
-  if(id==='qcharge')return (B&&B.qCharge!=null)?B.qCharge:((paramLetter&&paramLetter.qCharge!=null)?paramLetter.qCharge:spec.def);
+  if(id==='vsize')return (B&&B.vGive!=null)?B.vGive:((_pl&&_pl.vGive!=null)?_pl.vGive:spec.def);
+  if(id==='vang')return (B&&B.vAng!=null)?B.vAng:((_pl&&_pl.vAng!=null)?_pl.vAng:spec.def);
+  if(id==='asize')return (B&&B.aGive!=null)?B.aGive:((_pl&&_pl.aGive!=null)?_pl.aGive:spec.def);
+  if(id==='aang')return (B&&B.aAng!=null)?B.aAng:((_pl&&_pl.aAng!=null)?_pl.aAng:spec.def);
+  if(id==='qcharge')return (B&&B.qCharge!=null)?B.qCharge:((_pl&&_pl.qCharge!=null)?_pl.qCharge:spec.def);
   if(id==='wcharge')return (B&&B.charge!=null)?B.charge:0;
   if(id==='wacc'){
     if(!B)return 0;
@@ -10042,6 +10064,11 @@ function applyParam(B,spec,val){
   if(!B.param)B.param={};
   B.param[spec.key]=val;
   var key=spec.key;
+  /* ★★2026-10（阶段 B）：与 `paramV` 同源 —— 授予型参数写回**字符**还是**宿主体**，
+   *  由面板正在编辑的是不是字符决定（R132-9d dock 模板规则）。经门面取同一个字符对象，
+   *  否则「写回一个字符、却从另一个字符读」会让 dock 模板规则失效。 */
+  var _pf=(typeof globalThis!=='undefined')?globalThis.__panelFacade:null;
+  var _pl=_pf?_pf.targetLetter():paramLetter;
   /* ★★R132-9d（用户 2026-10-01：「v 数值改成 c 后，怎么再修改数值都修改不了了？」）：
    *  光速态原本只由 `bossFinish/bossAbort` 复位 ⇒ 用户把 v 设成 c 之后，`bossLightState()` 恒真，
    *  面板那一行被锁在「c = 光速」（数字框被清空 + placeholder='c'、滑块顶到最右）⇒ 再也改不回数字。
@@ -10064,14 +10091,14 @@ function applyParam(B,spec,val){
    *   ⇒ 每个拖出来的 v 各自独立，改谁只影响谁。 */
   /* 面板上的改法见上（CHAR_DEF）；**世界里那个字符**才写回它自己。 */
   if(key==='vsize'){B.vGive=(val<0?0:val);
-    if(paramLetter){if(paramLetter.state!=='dock')paramLetter.vGive=B.vGive;else charDefWrite(paramLetter,'vGive',B.vGive);}return;}
+    if(_pl){if(_pl.state!=='dock')_pl.vGive=B.vGive;else charDefWrite(_pl,'vGive',B.vGive);}return;}
   if(key==='vang'){B.vAng=val;
-    if(paramLetter){if(paramLetter.state!=='dock')paramLetter.vAng=val;else charDefWrite(paramLetter,'vAng',val);}return;}
+    if(_pl){if(_pl.state!=='dock')_pl.vAng=val;else charDefWrite(_pl,'vAng',val);}return;}
   /* ★R132-9k：a 的两行同口径（面板单例不写回；世界里那个字符才写回）。 */
   if(key==='asize'){B.aGive=(val<0?0:val);
-    if(paramLetter){if(paramLetter.state!=='dock')paramLetter.aGive=B.aGive;else charDefWrite(paramLetter,'aGive',B.aGive);}return;}
+    if(_pl){if(_pl.state!=='dock')_pl.aGive=B.aGive;else charDefWrite(_pl,'aGive',B.aGive);}return;}
   if(key==='aang'){B.aAng=val;
-    if(paramLetter){if(paramLetter.state!=='dock')paramLetter.aAng=val;else charDefWrite(paramLetter,'aAng',val);}return;}
+    if(_pl){if(_pl.state!=='dock')_pl.aAng=val;else charDefWrite(_pl,'aAng',val);}return;}
   /* ★★R132-9k（用户 2026-10-02：「q 赋予抽搐问题，我又成功复现了，现在更加精准，
    *  是**对 q 调节过参数之后**再进行赋予就会出现这样的问题」）：
    *  R132-9d 只给 `vsize`/`vang` 两行加了 `paramLetter.state!=='dock'` 的门 **✗ 漏了这三行**
@@ -10080,7 +10107,7 @@ function applyParam(B,spec,val){
    *    与"赋予"路径叠加就出了用户报的抽搐。
    *  ⇒ 与 v 同口径：**dock 态不写回**（模板只负责颜值，不负责数值）。 */
   if(key==='qcharge'){B.qCharge=val;
-    if(paramLetter){if(paramLetter.state!=='dock')paramLetter.qCharge=val;else charDefWrite(paramLetter,'qCharge',val);}return;}
+    if(_pl){if(_pl.state!=='dock')_pl.qCharge=val;else charDefWrite(_pl,'qCharge',val);}return;}
   if(key==='wcharge'){B.charge=val;return;}
   if(key==='wacc'){
     /* ★R131-50：改「合成大小」= 保持当前方向、重设长度（等价于把合成矢量重新标定） */
@@ -11175,7 +11202,9 @@ function appendPairRow(spec,field){
 // 配对覆盖改动后，让 Matter 的**当前活动对**立刻按新值生效（否则要等重新接触）
 function refreshPairUI(){
   if(paramBody&&paramBody.kind==='W')refreshWPairs(paramBody);
-  if(paramBody)renderParamPanel();
+  /* ★2026-10（阶段 B）：经面板门面刷新 —— 门面自己带「没开面板就什么都不做」的守卫，
+     所以调用方不再需要各自重复 if(paramBody)。 */
+  _panelRefresh();
 }
 // R64（用户：「如果此时该物体还接触了其他的物体，则还会临时显示与该物体的摩擦系数大小」）：
 // 参数面板开着且对象是 W 体时，列出配对摩擦的**实际生效**数值（动摩擦 = 双方 min、
@@ -19200,13 +19229,13 @@ function openTrailBox(ent){
   TRAIL_TGT=trailOwner(ent||trailTarget());
   if(!TRAIL_TGT)return;               // 没有作用对象就不进（宁可不开，也别写到野对象上）
   trailPaneOpen=true;
-  if(paramBody){renderParamPanel();if(typeof clampParamPanel==='function')clampParamPanel();}
+  _panelRefreshAndClamp();
 }
 function closeTrailBox(){
   /* 退回参数页（与次级页里「‹ 返回参数」同效，方便探针直接调用）。 */
   trailPaneOpen=false;
   TRAIL_TGT=null;
-  if(paramBody)renderParamPanel();
+  _panelRefresh();
 }
 /* ★★R133b：更新记录（设置 → 「更新记录」标题 → 「历史记录」按钮 → 次级菜单）。
    用户 2026-10-07：「在设置界面最下面增加一个更新记录标题，下面有一个历史记录按钮，点击
@@ -20467,9 +20496,16 @@ function bossLightOn(nu,val){
   if(nu){nu.value='';nu.placeholder='c';}
   if(val)val.textContent='c ≈ '+C_LIGHT+' m/s';
   /* 滑块顶到最右（max 临时放宽到光速），让「数值变成光速」在两种控件上都看得见 */
-  if(paramRows){
-    for(var i=0;i<paramRows.length;i++){
-      var R=paramRows[i];
+  /* ★2026-10（阶段 B）：面板行改经门面取 —— 这段是**跨子系统**访问面板内部状态
+     （光速态要就地放宽 vsize 那一行的滑块量程），所以它必须通过一个具名接口，
+     而不是直接读面板的私有数组。 */
+  var _prows=(function(){
+    var F=(typeof globalThis!=='undefined')?globalThis.__panelFacade:null;
+    return F?F.rows():paramRows;
+  })();
+  if(_prows){
+    for(var i=0;i<_prows.length;i++){
+      var R=_prows[i];
       if(R&&R.spec&&R.spec.key==='vsize'){R.sl.max=C_LIGHT;R.sl.value=C_LIGHT;}
     }
   }
@@ -20489,7 +20525,7 @@ function bossLightReset(skipRender){
   if(typeof vO!=='undefined'&&vO&&vO.vLight){vO.vLight=false;vO.vGive=null;any=true;}
   /* ★R132-9d：`skipRender=true` 供 applyParam 用 —— 用户正在输入框里改数值，
    *  这里若重渲染面板会把输入框重建、焦点与刚敲的字符一起丢。 */
-  if(any&&!skipRender&&typeof renderParamPanel==='function'&&paramBody)renderParamPanel();
+  if(any&&!skipRender)_panelRefresh();
 }
 /* 当前参数面板是否处于「v = 光速」态（vsize 行渲染用） */
 function bossLightState(){

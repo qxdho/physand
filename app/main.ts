@@ -36,6 +36,7 @@ import {
   RECORDER_FACADE_KEY,
   type RecorderFacade,
 } from './core/recorder-facade';
+import { PANEL_FACADE_EPILOGUE, PANEL_FACADE_KEY, type PanelFacade } from './core/panel-facade';
 
 // Side-effect imports: these modules perform the `params.register(...)` calls.
 // Without them the registry is EMPTY at boot, the hook claims no ids, and the
@@ -118,6 +119,25 @@ function installRecorderFacade(): void {
   } satisfies RecorderFacade;
 }
 
+/**
+ * Install the panel facade object that the in-scope epilogue populates.
+ *
+ * The panel owns state that two other subsystems read (the parameter accessors
+ * consult `paramLetter`, the light-speed path touches `paramRows`) plus a
+ * refresh operation nine call sites were doing by hand. Must run before the
+ * legacy source is evaluated.
+ */
+function installPanelFacade(): void {
+  (globalThis as unknown as Record<string, unknown>)[PANEL_FACADE_KEY] = {
+    targetBody: () => null,
+    targetLetter: () => null,
+    rows: () => [],
+    isOpen: () => false,
+    refresh: () => {},
+    refreshAndClamp: () => {},
+  } satisfies PanelFacade;
+}
+
 function boot(): void {
   installStaticDom();
 
@@ -134,15 +154,16 @@ function boot(): void {
 
   // Stage 3: the application.
   //
-  // Both hook objects must be installed BEFORE this runs, because the epilogues
+  // All hook objects must be installed BEFORE this runs, because the epilogues
   // execute inside the same scope and read them. See app/core/panel-hooks.ts for
   // why hooks cannot be applied afterwards by patching globals.
   installParamHooks();
   installRecorderFacade();
+  installPanelFacade();
   evaluateAsClassicScript(
     appSource,
     LEGACY_GLOBAL_NAMES,
-    PANEL_HOOK_EPILOGUE + RECORDER_FACADE_EPILOGUE,
+    PANEL_HOOK_EPILOGUE + RECORDER_FACADE_EPILOGUE + PANEL_FACADE_EPILOGUE,
   );
 
   // Stage 4: the boss animation IIFE, which calls back into the app globals.
