@@ -228,6 +228,53 @@ test('every installed bridge object is actually consumed somewhere', () => {
   );
 });
 
+test('body removal goes through the collection module, not a bare splice', () => {
+  /* WHY THIS EXISTS (phase C, the `physics` boundary)
+   * The lifecycle survey found 13 removal sites: 8 hand-written
+   * \`indexOf\`+splice pairs and 5 bare splices inside backwards loops. They now all
+   * call one of two helpers, which delegate to app/physics/body-list.ts.
+   *
+   * A bare splice is easy to reintroduce and hard to notice: it works, it just
+   * skips the single place where the "remove by identity, tolerate a double
+   * remove" rule lives. So this guard fails on any NEW direct splice.
+   *
+   * The array itself is not being replaced (≈372 read sites index into it), so
+   * reads are still fine — only the mutation has one door.
+   */
+  const legacy = readFileSync(join(APP, '..', 'src', '10-app.js'), 'utf8');
+  const lines = legacy.split('\n');
+
+  /* The two helpers are the intended home for the fallback splice, so their own
+   * bodies are the only place it may appear. Located by name rather than by line
+   * number so the guard survives edits above them. */
+  const allowed = new Set<number>();
+  for (const helper of ['function _bodyRemove(B){', 'function _bodyRemoveAt(i){']) {
+    const start = lines.findIndex((l) => l.startsWith(helper));
+    assert.ok(start > 0, `${helper} must exist`);
+    let depth = 0;
+    for (let i = start; i < lines.length; i++) {
+      allowed.add(i);
+      depth += (lines[i]!.match(/{/g) ?? []).length;
+      depth -= (lines[i]!.match(/}/g) ?? []).length;
+      if (depth <= 0 && i > start) break;
+    }
+  }
+
+  const offenders: string[] = [];
+  lines.forEach((line, i) => {
+    if (/^\s*\*|^\s*\/\*/.test(line)) return; // comments may mention it
+    if (!/bodies\.splice\(/.test(line)) return;
+    if (allowed.has(i)) return; // inside the helpers: the one intended fallback
+    offenders.push(`L${i + 1}: ${line.trim()}`);
+  });
+  assert.deepEqual(
+    offenders,
+    [],
+    `these sites remove a body directly instead of via _bodyRemove/_bodyRemoveAt:\n` +
+      offenders.join('\n'),
+  );
+});
+
 test('generated files declare themselves as generated', () => {
   // Someone editing a generated file by hand would have their change silently
   // overwritten by the next `npm run gen`. The header is the warning.

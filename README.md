@@ -129,7 +129,7 @@ spring-stiff-sag       硬弹簧（k 大）必须几乎不下垂 ★
 rod-length-changed     改杆长必须真的改变两端几何 ★
 ```
 
-★ = 2026-10 新增。另有 207 条单元测试覆盖新模块，跑 `npm run test:unit`。
+★ = 2026-10 新增。另有 208 条单元测试覆盖新模块，跑 `npm run test:unit`。
 
 ★ = 2026-10 新增。它们补上了一个**严重盲区**：此前在 `rodSyncAnchors`
 （全项目最大的函数）开头注入 `if(1)return false;`，测试**依然 7/7 全绿** ——

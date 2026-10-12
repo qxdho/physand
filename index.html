@@ -1223,7 +1223,8 @@ function GD(ch,sc){
     if(!mb&&d.state==='dock'){
       var B2=promoteFreeLetter(d);
       if(B2){
-        var bi2=bodies.indexOf(B2);if(bi2>=0)bodies.splice(bi2,1);
+        /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
+        _bodyRemove(B2);
         /* ★★R132-9z：这个临时宿主**已经把字母从 bodies[] 摘掉了**（不是场上的体），
          *   却还挂在 `d.body` 上 ⇒ 字母变成「有个不在场上的宿主」的**孤儿**。
          *   后果实测（`_tmp_r370_qgive.py` B/C 臂）：右键面板 q 之后 `qO.hasBody` 变成 true，
@@ -1277,6 +1278,24 @@ EO.el.style.zIndex='5';
 kO.el.style.zIndex='5';
 xO.el.style.zIndex='5';
 freeG.push(gO,aO,vO,rO,M2O,halfO,muO,cO,GO,tO,BO,qO,IO,EO,kO,xO);
+/* ★★2026-10（阶段 C / `physics` 边界）：**物体集合的增删入口**。
+ *  勘定结果：1 个创建点、13 个移除点、0 次重新赋值 —— 一扇门进、十三扇门出、全靠身份。
+ *  这 13 处原来是 8 对手写 `indexOf`+splice 加 5 处倒序循环里的裸 splice：
+ *  现在都走**同一份实现**，于是「按身份移除、重复移除不报错」这条规则只有一个地方要守。
+ *  ⚠ 门面缺失时回退到原写法，保证单独 eval 本文件时也能工作。
+ *  ⚠⚠ **仍是同一个数组对象**：约 372 处读取写成 `bodies[i]`/`bodies.length`，
+ *  换对象会一次性打断全部。这里只收「增删两种操作」，不搬所有权。 */
+function _bodyRemove(B){
+  var BL=(typeof globalThis!=='undefined')?globalThis.__bodyList:null;
+  if(BL&&BL.remove)return BL.remove(B);
+  var i=bodies.indexOf(B);if(i>=0){bodies.splice(i,1);return true;}
+  return false;
+}
+function _bodyRemoveAt(i){
+  var BL=(typeof globalThis!=='undefined')?globalThis.__bodyList:null;
+  if(BL&&BL.removeAt){BL.removeAt(i);return;}
+  if(i>=0&&i<bodies.length)bodies.splice(i,1);
+}
 function BODY(x,y){
   var B={x:x,y:y,vx:0,vy:0,th:0,sc:1,glyphs:[],mem:[],massG:null,mass:1,massCap:3,hasG:false,hasA:false,hasV:false,hasR:false,family:0,hw:40,hh:26,dv:0,drag:false,diss:false,orbit:null,pendingOrbit:false,param:{},
     kind:null,fg:null,fieldR:0,Bz:1,qsign:1,Isign:1,fieldState:null,L:48,
@@ -1350,7 +1369,7 @@ function promoteFreeLetter(d){
       if(_bi>=0){
         if(B.mb&&MW&&MW.engine&&Matter&&Matter.Composite&&Matter.Composite.remove)
           Matter.Composite.remove(MW.engine.world,B.mb);
-        bodies.splice(_bi,1);
+        _bodyRemoveAt(_bi);
       }
       B._paramOnly=true;
       B.dead=false;
@@ -8536,7 +8555,8 @@ DD.addEventListener('pointerup',function(e){
           ringGo(nb3.x,nb3.y);
         }else{
           // not a valid merge after all — undo the promotion and keep the old behaviour
-          var ri3=bodies.indexOf(nb3);if(ri3>=0)bodies.splice(ri3,1);
+          /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
+          _bodyRemove(nb3);
           FM.body=null;FM.inBody=false;FM.pop=0;
           if(freeL.indexOf(FM)<0)freeL.push(FM);
           placeLetter(FM);
@@ -8806,7 +8826,8 @@ function bodyHitSpeed(B,comp){
   return Math.abs(v);
 }
 function shatter(B,mode){
-  var i=bodies.indexOf(B);if(i>=0)bodies.splice(i,1);
+  /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
+  _bodyRemove(B);
   /* ★★R133f：体被**物理消灭**（撞墙碎 / 撞出公式）= 用户从没关过轨迹 ⇒ 轨迹接着淡出，
      不能当帧瞬失（实测「会被画出来的点数」7 → 0，而点一个没少）。见 `trailRetire`。 */
   trailRetire(B);
@@ -11364,7 +11385,7 @@ function clearAll(){
     B.glyphs=[];B.mem=[];
     if(B.bh)B.bh.dead=true;
     removeMatterBody(B);
-    bodies.splice(i,1);
+    _bodyRemoveAt(i);
   }
   if(MW)Matter.Composite.clear(MW.wLayer,false);   // W bodies & rod mirrors; static frame stays
   // restore panel singletons: alive ones go back to dock; dead ones are rebuilt from scratch
@@ -11527,7 +11548,8 @@ function killBody(B){
       if(_c&&(_c.bodyA===B.mb||_c.bodyB===B.mb))Matter.Composite.remove(MW.engine.world,_c);
     }
   }
-  var i=bodies.indexOf(B);if(i>=0)bodies.splice(i,1);
+  /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
+  _bodyRemove(B);
   removeMatterBody(B);    // boundaries & rod mirrors live in the Matter world as well
   /* ★★R109：**删掉一个支撑体后，压在它上面的东西可能正睡着**；
      没人唤醒它们 ⇒ 支撑消失了但它们仍然挂在空中。
@@ -11868,12 +11890,13 @@ function blastBoundary(O,cx,cy){
     if(nb.mb){Matter.Body.setVelocity(nb.mb,{x:nb.vx/60,y:nb.vy/60});Matter.Sleeping.set(nb.mb,false);}
   }
   removeMatterBody(O);
-  bodies.splice(i0,1);
+  _bodyRemoveAt(i0);
   burstParticles(O.x,O.y,10,0.8);
 }
 function explodeBody(B){
   var cx=B.x,cy=B.y;
-  var i=bodies.indexOf(B);if(i>=0)bodies.splice(i,1);
+  /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
+  _bodyRemove(B);
   /* ★R133f：同 `shatter` —— 膨胀自毁也是**物理消灭**，轨迹该淡出而不是瞬失 */
   trailRetire(B);
   spawnExplosion(cx,cy);
@@ -12423,7 +12446,8 @@ function stepFinale(dt){
     if(Math.random()<0.8)suckPuff(h.x,h.y,F.hx,F.hy);
     if(F.t>=F.suckD){
       var hx=h.x,hy=h.y;
-      var bi=bodies.indexOf(h);if(bi>=0)bodies.splice(bi,1);
+      /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
+      _bodyRemove(h);
       if(h.bh){h.bh.dead=true;}
       F.removed=true;
       burstParticles(hx,hy,20,1.2);
@@ -12487,7 +12511,8 @@ function annihBody(O,idx){
   burstParticles(cx,cy,22,1.2);
   ringGo(cx,cy);
   removeMatterBody(O);    // if a boundary is swallowed, its Matter body goes with it
-  var i=bodies.indexOf(O);if(i>=0)bodies.splice(i,1);
+  /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
+  _bodyRemove(O);
   if(O.go){var gD=O.go;if(gD.bin){var P2=gD.by;if(P2&&bodies.indexOf(P2)>=0){P2.vx=-Math.sin(gD.ang)*gD.w*gD.rad*gD.rP;P2.vy=Math.cos(gD.ang)*gD.w*gD.rad*gD.rP;P2.goB=null;}}O.go=null;}
   if(O.goB&&bodies.indexOf(O.goB)>=0){var H2=O.goB,gH2=H2.go;if(gH2){H2.vx=-Math.sin(gH2.ang)*gH2.w*gH2.rad*gH2.rB;H2.vy=Math.cos(gH2.ang)*gH2.w*gH2.rad*gH2.rB;H2.go=null;}O.goB.goB=null;}
   O.diss=true;
@@ -12517,7 +12542,8 @@ function killFieldBody(O,idx){
 var BLAST_R=500;
 function explodeBlackHole(B){
   var cx=B.x,cy=B.y;
-  var i=bodies.indexOf(B);if(i>=0)bodies.splice(i,1);
+  /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
+  _bodyRemove(B);
   if(B.bh)B.bh.dead=true;
   B.diss=true;
   B.glyphs.slice().forEach(function(g){if(g.body===B){g.body=null;g.inBody=false;killLetter(g);}});
@@ -21418,7 +21444,7 @@ function bossKillKept(){
     B._bossFrozen=false;B._bossKept=false;
     if(B.st&&B.st.bar&&B.st.bar.el&&B.st.bar.el.parentNode)
       B.st.bar.el.parentNode.removeChild(B.st.bar.el);
-    bodies.splice(i,1);
+    _bodyRemoveAt(i);
     n++;
   }
   return n;
@@ -21439,8 +21465,8 @@ function bossAbort(){
       if(g)g.dead=true;
     }
     Ek.glyphs=[];Ek.mem=[];
-    var bi=bodies.indexOf(Ek);
-    if(bi>=0)bodies.splice(bi,1);
+    /* ★2026-10（阶段 C）：身份移除经门面。 */
+    _bodyRemove(Ek);
     Ek._bossFrozen=false;
   }
   BOSS=null;
