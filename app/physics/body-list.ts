@@ -291,6 +291,28 @@ export interface BodyListBridge {
    * collection means a change of storage touches one place.
    */
   count(): number;
+
+  /**
+   * The body at an index, or undefined.
+   *
+   * WHY THIS EXISTS
+   * ---------------
+   * 87 loops are written as
+   *
+   *   for (var i = 0; i < _bodyCount(); i++) { var B = bodies[i]; ... }
+   *
+   * The bound was consolidated first (round 9 of this batch) because that was
+   * the zero-risk half. This accessor closes the other half, so the loop reads
+   * its element from the collection too.
+   *
+   * Indexed access is kept rather than replaced by a visitor callback on
+   * purpose. Several of these loops read `bodies[i]` at a NON-current index
+   * (pairwise scans, neighbour lookups) and several return or break out of the
+   * middle, so a callback shape would fight the code rather than clarify it.
+   * That would be a rewrite of 87 bodies — the exact bulk edit this project has
+   * been burned by.
+   */
+  at(index: number): LegacyBody | undefined;
 }
 
 export const BODY_LIST_KEY = '__bodyList';
@@ -318,6 +340,9 @@ export function installBodyListBridge(readArray: () => LegacyBody[] | undefined)
     },
     count() {
       return readArray()?.length ?? 0;
+    },
+    at(index) {
+      return readArray()?.[index];
     },
     forEachBody(visit) {
       const arr = readArray();

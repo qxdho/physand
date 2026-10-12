@@ -353,6 +353,55 @@ test('body iteration bounds come from the collection, not a raw length', () => {
   );
 });
 
+test('body element reads go through the collection too, not a raw index', () => {
+  /* WHY THIS EXISTS
+   * The loop bound was consolidated first because it was the zero-risk half.
+   * This closes the other half: 125 \`bodies[i]\` reads now go through
+   * \`_bodyAt(i)\`, so a loop's bound AND its element both come from the
+   * collection.
+   *
+   * A raw index read works fine today, which is exactly why it needs a guard —
+   * nothing about it looks wrong until the collection's storage changes.
+   *
+   * The helper's own fallback is the one legitimate mention; it is allowed by
+   * locating that function BY NAME.
+   */
+  const legacy = readFileSync(join(APP, '..', 'src', '10-app.js'), 'utf8');
+  const lines = legacy.split('\n');
+
+  const helperStart = lines.findIndex((l) => l.startsWith('function _bodyAt(i){'));
+  assert.ok(helperStart > 0, '_bodyAt must exist');
+  let helperEnd = helperStart;
+  for (let i = helperStart, depth = 0; i < lines.length; i++) {
+    depth += (lines[i]!.match(/{/g) ?? []).length;
+    depth -= (lines[i]!.match(/}/g) ?? []).length;
+    if (depth <= 0 && i > helperStart) { helperEnd = i; break; }
+  }
+
+  /* Block-comment aware. A line-based filter is not enough: this file contains
+   * multi-line block comments whose continuation lines do not start with an
+   * asterisk. Three such lines mention the array literal while explaining a
+   * past bug, and a naive filter reports them as violations. */
+  const offenders: string[] = [];
+  let inBlock = false;
+  lines.forEach((line, i) => {
+    const wasInBlock = inBlock;
+    if (/\/\*/.test(line)) inBlock = true;
+    const isComment = wasInBlock || /^\s*\*|^\s*\/\*|^\s*\/\//.test(line);
+    if (/\*\//.test(line)) inBlock = false;
+    if (isComment) return;
+    if (i >= helperStart && i <= helperEnd) return; // the intended fallback
+    if (/bodies\[/.test(line)) offenders.push(`L${i + 1}: ${line.trim()}`);
+  });
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'these lines index the raw bodies array instead of using _bodyAt():\n' +
+      offenders.join('\n'),
+  );
+});
+
 test('generated files declare themselves as generated', () => {
   // Someone editing a generated file by hand would have their change silently
   // overwritten by the next `npm run gen`. The header is the warning.

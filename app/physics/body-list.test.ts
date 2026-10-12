@@ -163,6 +163,7 @@ function readBridge(): {
   remove(b: unknown): boolean;
   removeAt(i: number): void;
   count(): number;
+  at(i: number): LegacyBody | undefined;
   forEachBody(visit: (b: LegacyBody, i: number) => void): void;
 } {
   return (globalThis as Record<string, unknown>)[BODY_LIST_KEY] as never;
@@ -381,4 +382,69 @@ test('forEachBody tolerates a missing array', () => {
     if (saved === undefined) delete g[BODY_LIST_KEY];
     else g[BODY_LIST_KEY] = saved;
   }
+});
+
+/* --------------------------------------------------------------------------
+ * at() — the indexed access surface
+ * ------------------------------------------------------------------------ */
+
+test('at returns the same object as the array slot', () => {
+  // 87 loop bodies were `var B = bodies[i]`; they now read through the
+  // collection. Identity must be preserved — anchors compare by object.
+  const { arr, bridge: b } = bridge([]);
+  const bs = [body(1), body(2), body(3)];
+  arr.push(...bs);
+  for (let i = 0; i < bs.length; i++) {
+    assert.equal(b.at(i), bs[i], `index ${i} must be the same object`);
+  }
+});
+
+test('at returns undefined out of range', () => {
+  // Loops are bounded by count(), so this should not happen — but several
+  // pairwise scans index with i+1, and a defensive undefined beats a crash.
+  const { arr, bridge: b } = bridge([]);
+  arr.push(body(1));
+  assert.equal(b.at(1), undefined);
+  assert.equal(b.at(-1), undefined);
+  assert.equal(b.at(999), undefined);
+});
+
+test('at follows the live array across removals', () => {
+  // A cached or copied view would keep returning a removed body.
+  const { arr, bridge: b } = bridge([]);
+  const a1 = body(1), a2 = body(2);
+  arr.push(a1, a2);
+  assert.equal(b.at(1), a2);
+  b.remove(a1);
+  assert.equal(b.at(0), a2, 'indices shifted with the removal');
+  assert.equal(b.at(1), undefined);
+});
+
+test('at is undefined when there is no array yet', () => {
+  const g = globalThis as Record<string, unknown>;
+  const saved = g[BODY_LIST_KEY];
+  installBodyListBridge(() => undefined);
+  try {
+    const b = g[BODY_LIST_KEY] as { at(i: number): unknown };
+    assert.equal(b.at(0), undefined);
+  } finally {
+    if (saved === undefined) delete g[BODY_LIST_KEY];
+    else g[BODY_LIST_KEY] = saved;
+  }
+});
+
+test('count and at agree, which is what a loop depends on', () => {
+  /* The two halves of the loop contract: the bound and the element. If they ever
+   * disagreed, a loop would read a slot the bound said exists.
+   */
+  const { arr, bridge: b } = bridge([]);
+  const bs = [body(1), body(2), body(3)];
+  arr.push(...bs);
+  const collected: LegacyBody[] = [];
+  for (let i = 0; i < b.count(); i++) {
+    const x = b.at(i);
+    assert.ok(x !== undefined, `slot ${i} must exist while i < count()`);
+    collected.push(x!);
+  }
+  assert.deepEqual(collected, bs);
 });

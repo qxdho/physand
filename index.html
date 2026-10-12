@@ -1300,6 +1300,17 @@ freeG.push(gO,aO,vO,rO,M2O,halfO,muO,cO,GO,tO,BO,qO,IO,EO,kO,xO);
  *  但每处都各自重述一遍上界，而上界必须和集合的存储方式保持一致。
  *  收成一处之后，将来集合换了存储，只有这里要改。
  *  ⚠ 本函数是**只读**查询：即使某处转换有误也不会改变循环在做什么。 */
+/* ★★2026-10（阶段 C）：**按索引取物体的具名查询** —— 87 处循环体的唯一来源。
+ *  上界先收口（零风险的一半），这里收另一半，于是循环的上界和取元素都来自集合。
+ *  刻意保留**索引式**访问而不是改成回调式：这些循环里有不少会在**非当前索引**处取值
+ *  （配对扫描、邻居查找），还有不少会中途 return/break。改成回调会跟代码打架而不是澄清它 ——
+ *  那等于重写 87 个循环体，正是本项目被烧过的批量编辑。
+ *  ⚠ 只读。 */
+function _bodyAt(i){
+  var BL=(typeof globalThis!=='undefined')?globalThis.__bodyList:null;
+  if(BL&&BL.at)return BL.at(i);
+  return bodies[i];
+}
 function _bodyCount(){
   var BL=(typeof globalThis!=='undefined')?globalThis.__bodyList:null;
   if(BL&&BL.count)return BL.count();
@@ -1728,7 +1739,7 @@ function findTComboTarget(L){
   }
   if(!best){
     for(var i=0;i<_bodyCount();i++){
-      var B=bodies[i];
+      var B=_bodyAt(i);
       if(B.massG===L||B.mem.indexOf(L)>=0)continue;
       var a=tAnchor(B);
       // R60c：宿主这一路也用盒距（tAnchor 只是锚点，旧写法拿它算 150px 半径）
@@ -1965,7 +1976,7 @@ function springKBook(){
   for(i=0;i<SPR_KHOST.length;i++)SPR_KHOST[i]._kS=0;
   SPR_KHOST.length=0;
   for(i=0;i<_bodyCount();i++){
-    S=bodies[i];
+    S=_bodyAt(i);
     if(!S||S.kind!=='S'||S.dead)continue;
     var ke=springKEff(S.ks);
     for(e=0;e<2;e++){
@@ -3097,7 +3108,7 @@ function rodXPBDVel(RODS){
 function springHostPinnedByAnvil(h,exceptB){
   if(!h)return false;
   for(var i=0;i<_bodyCount();i++){
-    var E=bodies[i];
+    var E=_bodyAt(i);
     if(!E||E.dead||E===exceptB||!E.anc)continue;
     var isRod=(E.kind==='T'),isRope=(E.kind==='S'&&E.rope);
     if(!isRod&&!isRope)continue;
@@ -3240,7 +3251,7 @@ function rodDragPinChain(seed){
   if(!grab||grab.kind!=='body'||!grab.obj)return false;
   var rods=[],i;
   for(i=0;i<_bodyCount();i++){
-    var R=bodies[i];
+    var R=_bodyAt(i);
     if(!R||R.dead||R.kind!=='T'||!R.anc)continue;
     if(grab.obj===R)continue;                       // 被拖的就是这根杆 ⇒ 上面那条通道已经解过
     if(!R.anc[0]&&!R.anc[1])continue;
@@ -3435,7 +3446,7 @@ function rodTryAnchor(B){
     if(B.anc[i])continue;                        // 已拴住的保持原样（不抢不换）
     var e=rodEndWorld(B,i),bd=ROD_SNAP,hit=null;
     for(var j=0;j<_bodyCount();j++){
-      var h=bodies[j];
+      var h=_bodyAt(j);
       if(h===B||h.dead)continue;
       if(grab.kind==='body'&&grab.obj===h)continue;   // 正在被拖的东西不算「固定物」
       // ★R103-6（_tmp_trace4 实测）：杆端不许锚到**铰链器件**上 —— 铰链是连接件不是
@@ -3457,7 +3468,7 @@ function rodTryAnchor(B){
       //   拖杆松手时自由端正贴着铰链另一端的宿主，没有这条守卫必中。
       var hin3=false;
       for(var hq=0;hq<_bodyCount();hq++){
-        var H3=bodies[hq];
+        var H3=_bodyAt(hq);
         if(H3===B||H3.dead||H3.kind!=='S'||!H3.hinge||!H3.anc)continue;
         var t0=H3.anc[0],t1=H3.anc[1];
         if(t0&&t1&&((t0.B===B&&t1.B===h)||(t0.B===h&&t1.B===B))){hin3=true;break;}
@@ -3862,7 +3873,7 @@ function dragAxisLock(B){
   if(!B||B.kind==='S'||!B.mb)return null;
   var found=null;
   for(var j=0;j<_bodyCount();j++){
-    var S=bodies[j];
+    var S=_bodyAt(j);
     if(S.kind!=='S'||S.dead||!S.dirLock)continue;
     for(var i=0;i<2;i++){
       var a=S.anc[i],o=S.anc[1-i];
@@ -3884,7 +3895,7 @@ dragAxisLock._r94=true;
 function dragArcLock(B){
   if(!B||B.kind==='T')return null;
   for(var i=0;i<_bodyCount();i++){
-    var r=bodies[i];
+    var r=_bodyAt(i);
     if(r.kind!=='T'||r.dead||!r.anc)continue;
     for(var e=0;e<2;e++){
       var a=r.anc[e],o=r.anc[1-e];
@@ -3926,9 +3937,9 @@ dragPtrAxis._r94=true;
 // 强制把作用点折叠到质心）。两根弹簧一锁一不锁共宿主时按锁的算（并集语义）。
 function springSyncLocks(){
   var i,e,B;
-  for(i=0;i<_bodyCount();i++){if(bodies[i]._lockRot)bodies[i]._lockRot=false;}
+  for(i=0;i<_bodyCount();i++){if(_bodyAt(i)._lockRot)_bodyAt(i)._lockRot=false;}
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(B.kind!=='S'||B.dead||!B.dirLock)continue;
     // R83：**自动**轴锁在大学模式不冻结宿主自转 —— 它锁的是「方向」，自转与这条导轨毫无
     //   耦合；冻结它只会白白推翻 R77 的契约（球连了弹簧就再也滚不起来）。
@@ -4263,7 +4274,7 @@ function springEndCaps(B){
   if(!_nA1)_fe.push({i:1,e:B.e1,o:B.e0});
   var _hits=[],_maxPen=0,_hitEnd=null;
   for(var j=0;j<_bodyCount();j++){
-    var b=bodies[j];
+    var b=_bodyAt(j);
     if(b.dead||!b.mb||b.mb.isStatic||b===B)continue;
     if(B.anc[0]&&B.anc[0].B===b)continue;
     if(B.anc[1]&&B.anc[1].B===b)continue;
@@ -4351,13 +4362,13 @@ function setCGroup(body,g){
 function springSyncGroups(){
   var i,e,B,S;
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(B._sprG&&B.mb){setCGroup(B.mb,0);B._sprG=false;}
     if(B._hinG&&B.mb){setCGroup(B.mb,0);B._hinG=false;}   // R103-5：铰链组标记也要逐帧重算
     if(B._rodHG&&B.mb){setCGroup(B.mb,0);B._rodHG=false;} // ★R131-19：杆锚定宿主组标记重算
   }
   for(i=0;i<_bodyCount();i++){
-    S=bodies[i];
+    S=_bodyAt(i);
     if(S.kind!=='S'||S.dead)continue;
     // ★R103-8（_tmp_jamcheck 实测）：铰链**没有 Matter 镜面板**（R101⑦），把它的两端
     //   宿主塞进 −2 毫无用处，纯粹造成「铰链两端宿主互不碰撞」—— 两个普通物体被铰住后
@@ -4523,7 +4534,7 @@ var ROD_HINGE_TORQUE=1;
 function rodHingeTorque(dt){
   if(!MW||!MW.engine)return;
   for(var i=0;i<_bodyCount();i++){
-    var R=bodies[i];
+    var R=_bodyAt(i);
     /* ★★R131-52（用户：「器件铰链松手能吸，但我要的是**没松手时靠近就有红点并吸附过去**」）：
      *  预览扫描原来只处理**杆(T)** ⇒ 铰链器件(S+hinge)拖动时没有任何反馈。这里纳入铰链，
      *  并用它与弹簧一致的端点取值（springEnd）。 */
@@ -4618,7 +4629,7 @@ function rodHingeTorque(dt){
       if(_oAnvil&&!_oDyn){
         var _nL=0;
         for(var _ri=0;_ri<_bodyCount();_ri++){
-          var _RR=bodies[_ri];
+          var _RR=_bodyAt(_ri);
           if(_RR.kind!=='T'||_RR.dead||!_RR.anc)continue;
           for(var _re=0;_re<2;_re++){
             var _ra=_RR.anc[_re];if(!_ra||_ra.B!==h)continue;
@@ -4710,10 +4721,10 @@ function rodHingeTorque(dt){
  *  每帧先清零再按当前连接设置 ⇒ 解除连接后自动恢复可碰撞。 */
 function rodSyncNoCollide(){
   var i;
-  for(i=0;i<_bodyCount();i++)if(bodies[i]._rcg){bodies[i]._rcg=0;
-    if(bodies[i].mb)bodies[i].mb.collisionFilter.group=0;}
+  for(i=0;i<_bodyCount();i++)if(_bodyAt(i)._rcg){_bodyAt(i)._rcg=0;
+    if(_bodyAt(i).mb)_bodyAt(i).mb.collisionFilter.group=0;}
   for(i=0;i<_bodyCount();i++){
-    var R=bodies[i];
+    var R=_bodyAt(i);
     /* ★R131-41（用户澄清：「我指的是单独的**铰链器件**，不是杆」）：铰链在实现上是
      *  **S 体 + hinge 标记**（不是 T）⇒ 上一版只处理杆 ⇒ 铰链连接的物体仍在互撞。
      *  这里把 T（杆）与 S+hinge（铰链器件）一并纳入。 */
@@ -4748,9 +4759,9 @@ function rodSyncNoCollide(){
 }
 function rodSyncLocks(){
   var i,e,B;
-  for(i=0;i<_bodyCount();i++){if(bodies[i]._rodLK)bodies[i]._rodLK=false;if(bodies[i]._hinged)bodies[i]._hinged=false;}
+  for(i=0;i<_bodyCount();i++){if(_bodyAt(i)._rodLK)_bodyAt(i)._rodLK=false;if(_bodyAt(i)._hinged)_bodyAt(i)._hinged=false;}
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(B.kind!=='T'||B.dead||!B.anc)continue;
     for(e=0;e<2;e++){
       var a=B.anc[e];
@@ -4831,7 +4842,7 @@ function stepSprings(dt){
   rodSyncNoCollide();    // ★R131-38：铰链两物体互不碰撞（消除边界抖动）
   springSyncGroups();
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.kind!=='S'||B.dead)continue;
     springSyncEnds(B);
     var freeEndOnly=false;               // R71③：只有一端拴住 = 自由端无载荷 → 内力恒为 0
@@ -5364,7 +5375,7 @@ function springTryAnchor(B){
     //   对弹簧/绳同样成立：两端拴在同一块刚体上，内力自成闭环、对外恒为零，没有任何意义。
     var other=((i===0)?B.anc[1]:B.anc[0]);
     for(var j=0;j<_bodyCount();j++){
-      var h=bodies[j];
+      var h=_bodyAt(j);
       if(h===B||h.dead)continue;
       if(grab.kind==='body'&&grab.obj===h)continue;   // 正在被拖的东西不算「固定物」
       if(other&&other.B===h)continue;                 // R102：另一头已拴在它身上 ⇒ 不能重复占
@@ -5400,7 +5411,7 @@ function springTryAnchor(B){
       //   本端已通过铰链连着候选宿主 ⇒ 不许再直接锚（过约束互推，见那边注释）。
       var hin2=false;
       for(var hk=0;hk<_bodyCount();hk++){
-        var H2=bodies[hk];
+        var H2=_bodyAt(hk);
         if(H2===B||H2.dead||H2.kind!=='S'||!H2.hinge||!H2.anc)continue;
         var r0=H2.anc[0],r1=H2.anc[1];
         if(r0&&r1&&((r0.B===B&&r1.B===h)||(r0.B===h&&r1.B===B))){hin2=true;break;}
@@ -5472,7 +5483,7 @@ function springTryAnchorByHost(host){
   // 那条路会维护 _freeTk，而杆没有「自由端跟进」这个语义）。
   if(host.kind==='T')rodTryAnchor(host);
   for(var j=0;j<_bodyCount();j++){
-    var S=bodies[j];
+    var S=_bodyAt(j);
     // R100①：杆也接受「物体拖到它端点旁」的反向连接（与弹簧逐字同构）
     if((S.kind!=='S'&&S.kind!=='T')||S.dead||S===host||!S.anc)continue;
     for(var i=0;i<2;i++){
@@ -5501,7 +5512,7 @@ function springTryAnchorByHost(host){
       //   而且 C 一爬走、第二次点击就落空，双击解除永远送不到位。
       var hingedToHost=false;
       for(var hj=0;hj<_bodyCount();hj++){
-        var HH=bodies[hj];
+        var HH=_bodyAt(hj);
         if(HH===S||HH.dead||HH.kind!=='S'||!HH.hinge||!HH.anc)continue;
         var p0=HH.anc[0],p1=HH.anc[1];
         if(p0&&p1&&((p0.B===S&&p1.B===host)||(p0.B===host&&p1.B===S))){hingedToHost=true;break;}
@@ -5542,7 +5553,7 @@ function springTryAnchorByHost(host){
 function springDisconnectAtPoint(x,y){
   var hitAny=false;
   for(var j=0;j<_bodyCount();j++){
-    var S=bodies[j];
+    var S=_bodyAt(j);
     // R100①：杆也进这一族（解除语义逐字相同：点端点附近 = 断开那一端）
     if((S.kind!=='S'&&S.kind!=='T')||S.dead||!S.anc)continue;
     for(var i=0;i<2;i++){
@@ -5685,7 +5696,7 @@ function springFollowHostShift(h,mvx,mvy,excludeB){
   if(!h.mb||h.kind!=='W')return;
   var done=[];
   for(var i=0;i<_bodyCount();i++){
-    var R=bodies[i];
+    var R=_bodyAt(i);
     if(!R||R.dead||R===excludeB||!R.anc)continue;
     var isRod=(R.kind==='T');
     if(!isRod&&!(R.kind==='S'&&R.rope))continue;
@@ -5729,7 +5740,7 @@ function springPinHostsToOtherAnchors(hosts,excludeB){
   for(pass=0;pass<PINS;pass++){
     var moved=false;
     for(i=0;i<_bodyCount();i++){
-      var S=bodies[i];
+      var S=_bodyAt(i);
       if(!S||S.dead||S===excludeB||!S.anc)continue;
       var isRod=(S.kind==='T');
       var isRope=(S.kind==='S'&&S.rope);
@@ -5773,7 +5784,7 @@ function springPinHostsToOtherAnchors(hosts,excludeB){
       if(touched){
         if(isRod)rodResyncRodPose(S);
         for(k=0;k<_bodyCount();k++){
-          var S2=bodies[k];
+          var S2=_bodyAt(k);
           if(S2&&!S2.dead&&S2.kind==='S'&&S2.anc)springSyncEnds(S2);
         }
       }
@@ -6633,7 +6644,7 @@ function refresh(B){
      *  这样从根上避免"两个黑洞"的场景，配合下面的"停用合并"，黑洞逻辑回到最简单可靠。 */
     var _hasBH=false;
     for(var _bi2=0;_bi2<_bodyCount();_bi2++){
-      var _B2=bodies[_bi2];
+      var _B2=_bodyAt(_bi2);
       /* ★★R132-10o（用户 bug `1791077880063`「制造出两个黑洞后，会一直吸无法停下或恢复」）：
        *  原判据是 `_B2.bh.stage>=1`，而新生黑洞要在 **stage 0 停 0.8 秒**才升到 stage 1
        *  （`stepBlackHole` 的 `k=bh.t/0.8`）⇒ 0.8 秒内放两次史瓦西公式 = 两个黑洞。
@@ -7319,7 +7330,7 @@ function detachFieldGlyph(d){
 function findSolidBodyAt(x,y){
   var best=null,bd=1e9;
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B||B.dead)continue;
     /* ★★R131-46（用户：「a 现在放不出来，一放出来就融合到虚空了」）：真因=这个命中函数
      *  连**地面/墙/固定体**都算"可赋予的物体" ⇒ 把 v/a/q 拖到画布任何地方松手都会命中
@@ -7352,7 +7363,7 @@ function findSolidBodyAt(x,y){
 function findMergeTarget(d){
   var best=null,bg=1e9;
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.massG===d||B.mem.indexOf(d)>=0)continue;
     if(!canMerge(B,d))continue;
     var gap=bodyMergeGap(B,d);
@@ -7618,13 +7629,13 @@ function touchLongPressFire(cand){
   var _mb=hoverB||((cand&&!cand.ch&&!cand.dead)?cand:null)||null;
   if(!_mb){
     for(var _mi=0;_mi<_bodyCount();_mi++){
-      var _B2=bodies[_mi];
+      var _B2=_bodyAt(_mi);
       /* 触摸放宽：手指粗 ⇒ 用「距表面 <15px」，不用严格的墨线命中（实测差 2px 就漏） */
       if(_B2&&!_B2.dead&&_B2.kind==='W'&&distToHost(_B2,pointer.x,pointer.y)<15){_mb=_B2;break;}
     }
     if(!_mb){
       for(_mi=0;_mi<_bodyCount();_mi++){
-        _B2=bodies[_mi];
+        _B2=_bodyAt(_mi);
         if(_B2&&!_B2.dead&&_B2.kind==='S'&&segPointDist(_B2.e0.x,_B2.e0.y,_B2.e1.x,_B2.e1.y,pointer.x,pointer.y)<SPR_GRAB){_mb=_B2;break;}
       }
     }
@@ -7855,7 +7866,7 @@ cv.addEventListener('pointerdown',function(e){
    *  （R132-10t 统一口径），这里不再重复刷新 —— 见 `if(e.button!==0)return;` 之后那一句。 */
   var hit=null;
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     // R57：W 体（画出的线/空心图形）只认「线」，不认外接框的空白区。原来用 AABB 判定，
     // 于是点空心矩形正中间也能把它拖走 —— 和「只有线才是边界」的模型不一致（用户 #4）。
     // 判定与 refreshHover() 共用 nearInk()，保证「高亮得起来 = 抓得住」完全一致。
@@ -7923,13 +7934,13 @@ cv.addEventListener('contextmenu',function(e){
   var ci,CB;
   // ① 画出来的物体（W）—— 只在墨线上响应，空心内部不弹菜单（与悬浮/抓取一致）
   for(ci=0;ci<_bodyCount();ci++){
-    CB=bodies[ci];
+    CB=_bodyAt(ci);
     if(CB.kind!=='W')continue;
     if(nearInk(CB,pointer.x,pointer.y)){openMenu(e.clientX,e.clientY,CB,null);return;}
   }
   // ② 弹簧（S）—— 整条线圈 ±SPR_GRAB 都是可点区，但只在没有物体命中时才轮到它
   for(ci=0;ci<_bodyCount();ci++){
-    CB=bodies[ci];
+    CB=_bodyAt(ci);
     if(CB.kind!=='S')continue;
     if(segPointDist(CB.e0.x,CB.e0.y,CB.e1.x,CB.e1.y,pointer.x,pointer.y)<SPR_GRAB){
       openMenu(e.clientX,e.clientY,CB,null);return;
@@ -7937,7 +7948,7 @@ cv.addEventListener('contextmenu',function(e){
   }
   // ③ 细杆（T）—— 没有字母，右键弹本体菜单（参数 = 杆长）
   for(ci=0;ci<_bodyCount();ci++){
-    CB=bodies[ci];
+    CB=_bodyAt(ci);
     if(CB.kind!=='T')continue;
     var dx2=pointer.x-CB.x,dy2=pointer.y-CB.y;
     var thT=CB.th||0,ctT=Math.cos(thT),stT=Math.sin(thT);
@@ -8170,7 +8181,7 @@ DD.addEventListener('pointerup',function(e){
   setTimeout(function(){
     if(grab&&grab.kind)return;
     for(var _ri=0;_ri<_bodyCount();_ri++){
-      var _R=bodies[_ri];
+      var _R=_bodyAt(_ri);
       if(_R.kind==='T'&&!_R.dead&&_R.anc&&(!_R.anc[0]||!_R.anc[1])){
         if(_R._snapCool&&performance.now()<_R._snapCool)continue;   // ★R131-32g：解除冷却
         try{rodTryAnchor(_R);}catch(_e){}
@@ -8223,7 +8234,7 @@ DD.addEventListener('pointerup',function(e){
         var _tgt=hoverB||(typeof hit!=='undefined'?hit:null);
         if(!_tgt){
           for(var _ti=0;_ti<_bodyCount();_ti++){
-            var _B3=bodies[_ti];
+            var _B3=_bodyAt(_ti);
             if(_B3&&!_B3.dead&&_B3.kind==='W'&&distToHost(_B3,pointer.x,pointer.y)<15){_tgt=_B3;break;}
           }
         }
@@ -8706,7 +8717,7 @@ DD.addEventListener('pointercancel',function(){
  *  修：调用点搬到 stepMatter 的子步循环里（每个子步施力一次）。dt 形参不用（量纲已含在系数里）。 */
 function applyGivenAccel(dt){
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B||B.dead||!B.accGive||!B.mb||B.mb.isStatic)continue;
     var ax=B.accX||0, ay=B.accY||0;
     if(!isFinite(ax)||!isFinite(ay))continue;
@@ -8722,7 +8733,7 @@ function applyGivenAccel(dt){
 }
 function stepPhysics(dt){
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.kind==='B'||B.kind==='E')continue;
     if(B.bh)continue;   // black holes (any stage) are handled by stepBlackHole, not normal physics
     if(grab.kind==='body'&&grab.obj===B)continue;
@@ -8835,7 +8846,7 @@ function freeLetterContact(d){
   _flProxy.glyphs[0]=d;
   var best=null;
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B||B.dead)continue;
     // 只认 W 体：bndHit 第一参数要过 bndSegs→bndPts（读 B.pts），而 T 杆 / S 弹簧没有 pts
     // （杆在 collideBodies 里走的是 SAT 分支、弹簧走镜像板），传进去会直接抛
@@ -9147,7 +9158,7 @@ function sameRodGroup(A,B){
    *  否则换个 kind 组合（例如公式体当宿主）又会从这条缝里漏出去。 */
   if((A.mb&&A.mb.isStatic)||(B.mb&&B.mb.isStatic))return false;
   for(var i=0;i<_bodyCount();i++){
-    var R=bodies[i];
+    var R=_bodyAt(i);
     if(R.dead||!R.anc)continue;
     if(R.kind!=='T'&&!(R.kind==='S'&&R.hinge))continue;
     var h0=R.anc[0]?R.anc[0].B:null, h1=R.anc[1]?R.anc[1].B:null;
@@ -9167,7 +9178,7 @@ function collideBodies(){
     return {ex:hw*c+hh*s,ey:hw*s+hh*c};
   }
   for(var i=0;i<_bodyCount();i++){
-    var A=bodies[i];
+    var A=_bodyAt(i);
     // fields pass through; black holes are singularities (no solid box). 'W' boundaries ARE
     // solid — they are walls, so they take part in exactly the same contact pass as a rod.
     // R69（用户：「我用画笔画出一个轨迹，然后让 q 运动，他就直接穿过去了；还有很多其他的
@@ -9183,7 +9194,7 @@ function collideBodies(){
     var ea=ext(A);
     /* ★2026-10（阶段 C）：配对扫描的上界同样取自集合（j 从 i+1 起，两两不重复）。 */
     for(var j=i+1;j<_bodyCount();j++){
-      var B=bodies[j];
+      var B=_bodyAt(j);
       // R69：同 A —— 让 q / I 也进入接触通道（见上一条注释）
       var BK=(!B.kind||B.kind==='T'||B.kind==='W'||B.kind==='S'||B.kind==='q'||B.kind==='I');
       if(!BK||B.bh)continue;
@@ -9490,7 +9501,7 @@ function refreshHover(){
   if(!grab.kind&&!TOOL.stroke&&!TOOL.drag&&!trashDrag.active){
     if(onRotHandle&&handleBody.kind==='W')hoverW=handleBody;
     else for(var wi=0;wi<_bodyCount();wi++){
-      var WB=bodies[wi];
+      var WB=_bodyAt(wi);
       if(WB.kind!=='W'||WB.dead)continue;
       if(nearInk(WB,pointer.x,pointer.y)){hoverW=WB;continue;}
       if(WB.ell){   // 弧的两个黄色端点手柄直径 18px，要够好点中
@@ -9506,7 +9517,7 @@ function refreshHover(){
   else{
     var best=null,bd=1e9;
     for(var i=0;i<_bodyCount();i++){
-      var B=bodies[i];
+      var B=_bodyAt(i);
       var s=(B.kind==='T')?{x:B.x,y:B.y}:(B.massG?slot(B,B.massG):{x:B.x,y:B.y});
       var dx=pointer.x-s.x,dy=pointer.y-s.y;
       if(B.kind==='E'){
@@ -10294,7 +10305,7 @@ function applyParam(B,spec,val){
      *   回退到 WAIR_GLOBAL 也拿到同一值。clamp 边界不变（它是「每帧速度占比」，≥1 反物理）。 */
     WAIR_GLOBAL=clamp(val,0,0.5);
     for(var _iw=0;_iw<_bodyCount();_iw++){
-      var _bw=bodies[_iw];
+      var _bw=_bodyAt(_iw);
       if(_bw.kind!=='W'||_bw.dead||!_bw.mb)continue;
       _bw.wAir=WAIR_GLOBAL;
       applyWAir(_bw);
@@ -10320,7 +10331,7 @@ function springAssemblyOf(seed){
       }
     }else{
       for(var i=0;i<_bodyCount();i++){
-        var S=bodies[i];
+        var S=_bodyAt(i);
         if(S.kind!=='S'||S.dead)continue;
         for(var e2=0;e2<2;e2++){
           var a2=S.anc[e2];
@@ -11042,7 +11053,7 @@ function bodyName(B){
   if(B._nm)return B._nm;
   var base=nameBase(B),n=0;
   for(var i=0;i<_bodyCount();i++){
-    var O=bodies[i];
+    var O=_bodyAt(i);
     if(O===B)break;
     if(nameBase(O)===base)n++;          // 只数**排在它前面**的同名类，与缓存无关
   }
@@ -11062,7 +11073,7 @@ function peerNameByKey(k){
   if(k==='@ground')return '地面';
   if(k==='@wall')return '墙';
   for(var i=0;i<_bodyCount();i++){
-    if(bodyPid(bodies[i])===k)return bodyName(bodies[i]);
+    if(bodyPid(_bodyAt(i))===k)return bodyName(_bodyAt(i));
   }
   return '（已移除）';
 }
@@ -11095,8 +11106,8 @@ function setPairOv(B,key,field,val){
   var peer=null;
   if(typeof key==='string'&&key.charAt(0)==='b'){
     for(var i=0;i<_bodyCount();i++){
-      if(!bodies[i]||bodies[i].dead)continue;
-      if(bodyPid(bodies[i])===key){peer=bodies[i];break;}
+      if(!_bodyAt(i)||_bodyAt(i).dead)continue;
+      if(bodyPid(_bodyAt(i))===key){peer=_bodyAt(i);break;}
     }
   }
   if(peer&&peer!==B){
@@ -11112,7 +11123,7 @@ function setPairOv(B,key,field,val){
 function bodyOfMb(mb){
   if(!MW||!mb)return null;
   if(mb===MW.ground||mb===MW.wl||mb===MW.wr||mb===MW.wt)return null;
-  for(var i=0;i<_bodyCount();i++)if(bodies[i].mb===mb)return bodies[i];
+  for(var i=0;i<_bodyCount();i++)if(_bodyAt(i).mb===mb)return _bodyAt(i);
   return null;
 }
 // R64：Matter 体 -> 可读名字（接触区用）。ground/wall 是引擎常驻静态体，其余按 mb 反查实体。
@@ -11122,7 +11133,7 @@ function matterBodyLabel(mb){
   if(mb===MW.ground)return '地面';
   if(mb===MW.wl||mb===MW.wr||mb===MW.wt)return '墙';
   for(var i=0;i<_bodyCount();i++){
-    if(bodies[i].mb===mb)return bodyName(bodies[i]);
+    if(_bodyAt(i).mb===mb)return bodyName(_bodyAt(i));
   }
   return '物体';
 }
@@ -11132,7 +11143,7 @@ function pairPeers(B){
            {key:'@ground',name:'地面'},
            {key:'@wall',name:'墙'}];
   for(var i=0;i<_bodyCount();i++){
-    var O=bodies[i];
+    var O=_bodyAt(i);
     if(!O||O===B||O.dead)continue;
     out.push({key:bodyPid(O),name:bodyName(O)});
   }
@@ -11329,7 +11340,7 @@ function updateParamContacts(){
   row('地面',map[MW.ground.id],0.6,0,false,MW.ground);
   row('墙',map[MW.wl.id]||map[MW.wr.id]||(MW.wt?map[MW.wt.id]:null),0.6,0,false,MW.wl);
   for(i=0;i<_bodyCount();i++){
-    var O=bodies[i];
+    var O=_bodyAt(i);
     if(!O||O===paramBody||O.dead)continue;
     n++;
     row(bodyName(O),O.mb?map[O.mb.id]:null,O.mb?muOf(O):null,O.mb?restOf(O):null,wMuIdeal(O),O.mb);
@@ -11404,7 +11415,7 @@ function clearAll(){
   }
   resetTrashPos();
   for(var i=bodies.length-1;i>=0;i--){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     for(var j=0;j<B.glyphs.length;j++){
       var g=B.glyphs[j];
       if(g.body===B){g.body=null;g.inBody=false;killLetter(g);}
@@ -11488,7 +11499,7 @@ function eraseUnderTrash(){
     if(overlap(r,d.el.getBoundingClientRect()))killLetter(d);
   }
   for(var j=bodies.length-1;j>=0;j--){
-    var B=bodies[j],hit=false;
+    var B=_bodyAt(j),hit=false;
     if(B.kind==='S'){
       // R61（用户：「将垃圾桶拖到弹簧上无法删除，拖到弹簧的整体上也无法删除」）：
       // 弹簧没有字形（B.glyphs 为空），旧代码落到 else 分支里空转一圈 -> hit 永远 false，
@@ -11531,7 +11542,7 @@ function grabLocked(){
 function trashDraggable(){
   if(BH_FINALE)return false;
   for(var _bi=0;_bi<_bodyCount();_bi++){
-    var _b=bodies[_bi];
+    var _b=_bodyAt(_bi);
     if(_b&&_b.bh&&!_b.bh.dead)return false;
   }
   return true;
@@ -11839,7 +11850,7 @@ function spawnExplosion(cx,cy){
 //  - rendered formula shards -> blown away with an outward kick
 function blastAt(cx,cy,R){
   for(var j=bodies.length-1;j>=0;j--){
-    var O=bodies[j];
+    var O=_bodyAt(j);
     if(O.bh)continue;
     if(grab.kind==='body'&&grab.obj===O)continue;
     // R56：画出来的边界（线/图形）以前被 O.kind 一刀切跳过——mc² 怎么都炸不掉它们。
@@ -11934,7 +11945,7 @@ function explodeBody(B){
 }
 function stepExplode(dt){
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B.exploding)continue;
     B.explT+=dt;
     var T=0.9;
@@ -11976,7 +11987,7 @@ function clearBHLetterFade(){
     if(!L||L.dead||L.fade==null)continue;
     var near=false;
     for(var j=0;j<_bodyCount();j++){
-      var H=bodies[j];
+      var H=_bodyAt(j);
       if(!H.bh||H.dead)continue;
       if(Math.hypot(H.x-L.wx,H.y-L.wy)<=((H.bh.r||0)+280)){near=true;break;}
     }
@@ -11989,7 +12000,7 @@ function stepBlackHole(dt){
    *   淡出分支重新写值，出半径/黑洞消失的一律被清掉。 */
   clearBHLetterFade();
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B.bh)continue;
     var bh=B.bh;
     bh.age+=dt;bh.spin+=dt*(0.5+bh.r/60);
@@ -12023,7 +12034,7 @@ function stepBlackHole(dt){
     if(!bh.forced&&bh.age>BH_FORCE_AGE){
       bh.forced=1;
       for(var fj=bodies.length-1;fj>=0;fj--){
-        var OF=bodies[fj];
+        var OF=_bodyAt(fj);
         if(!OF||OF===B||OF.bh||OF.dead)continue;
         if(grab.kind==='body'&&grab.obj===OF)continue;
         var ofIsField=(OF.kind==='q'||OF.kind==='I'||OF.kind==='B'||OF.kind==='E');
@@ -12057,13 +12068,13 @@ function stepBlackHole(dt){
     (function(){
       var seen={};
       for(var qi=0;qi<_bodyCount();qi++){
-        var Q0=bodies[qi];
+        var Q0=_bodyAt(qi);
         if(seen[Q0.i]!=null)continue;
         var comp=[],stk=[Q0];seen[Q0.i]=1;
         while(stk.length){
           var N=stk.pop();comp.push(N);
           for(var r2=0;r2<_bodyCount();r2++){
-            var RR2=bodies[r2];
+            var RR2=_bodyAt(r2);
             if(RR2.kind!=='T'||RR2.dead||!RR2.anc)continue;
             var aa2=RR2.anc[0],ab2=RR2.anc[1];
             if(!(aa2&&ab2&&aa2.B&&ab2.B))continue;
@@ -12082,7 +12093,7 @@ function stepBlackHole(dt){
       }
     })();
     for(var j=bodies.length-1;j>=0;j--){
-      var O=bodies[j];
+      var O=_bodyAt(j);
       if(O===B||O.bh)continue;
       if(grab.kind==='body'&&grab.obj===O)continue;
       var dx=B.x-O.x,dy=B.y-O.y;
@@ -12288,7 +12299,7 @@ function stepBHMerge(dt){
    *  而黑洞的吞噬顺序是先物体、后自由字母 —— 进入「吞字母」阶段时 bodies 已空 ⇒
    *  _others=0 ⇒ **提前触发融合**。修：还要把**未吞完的自由字母 (freeL)** 算进去。 */
   var _others=0;
-  for(var _oi=0;_oi<_bodyCount();_oi++){var _Ob=bodies[_oi];
+  for(var _oi=0;_oi<_bodyCount();_oi++){var _Ob=_bodyAt(_oi);
     if(_Ob!==A&&_Ob!==Bb&&!(_Ob.bh&&_Ob.bh.stage===1)&&!_Ob.dead)_others++;}
   /* ★R131-37：上一版把 freeL 也算进 _others —— 但黑洞**可能永远吞不完某些自由字母**
    *  （面板外飞的、被固定的字符）⇒ _others 恒 >0 ⇒ **永不融合**（用户实测：卡在一起
@@ -12358,7 +12369,7 @@ function maybeStartFinale(){
   if(trashDrag.active)return;
   var hole=null,holes=[];
   for(var i=0;i<_bodyCount();i++){
-    var Bx=bodies[i];
+    var Bx=_bodyAt(i);
     if(Bx.bh&&Bx.bh.stage===1){if(!hole)hole=Bx;holes.push(Bx);}
   }
   if(!hole)return;
@@ -12367,7 +12378,7 @@ function maybeStartFinale(){
    *  **合并（killBody）只在 otherBodies===0（吸完）后允许**——stepBHMerge 里判。
    *  吸完的瞬间若两洞已接近 ⇒ plunge 快速收尾；还远 ⇒ 继续螺旋到靠近。 */
   var otherBodies=0;
-  for(i=0;i<_bodyCount();i++){var By=bodies[i];if(!(By.bh&&By.bh.stage===1))otherBodies++;}
+  for(i=0;i<_bodyCount();i++){var By=_bodyAt(i);if(!(By.bh&&By.bh.stage===1))otherBodies++;}
   /* ★R131-57：**已停用「两黑洞合并」**（用户要求删掉融合逻辑；改为"不能同时两个黑洞"）。
    *  这里若真出现两个洞（历史存档/极端情况）也不启动合并——各自独立存在、各自吞东西。 */
   if(holes.length>=2)return;
@@ -12815,7 +12826,7 @@ function orbGeom(B){
 }
 function tickOrbs(dt){
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.pop&&B.pop>0)B.pop=Math.max(0,B.pop-dt*3.2);
     var o=B.orb;
     if(!o)continue;
@@ -12999,7 +13010,7 @@ function rodSnapPreviewScan(){
    *  改为**拖拽中也扫描**（只跳过「正被拖的那一端」——避免被拖端自己吸自己）。 */
   var _skipRod=(grab&&grab.kind&&(grab.obj&&grab.obj.kind==='T'))?grab.obj:null;
   for(var i=0;i<_bodyCount();i++){
-    var R=bodies[i];
+    var R=_bodyAt(i);
     /* ★★R131-52b（上一版改到了同名的另一处 ⇒ 真正的预览扫描里仍是旧的 kind!=='T'，
      *  实测「器件铰链拖动时没有红点」）——这里精确纳入**铰链器件(S+hinge)**。 */
     var _isHingeRod=!!(R&&R.kind==='S'&&R.hinge);
@@ -13012,7 +13023,7 @@ function rodSnapPreviewScan(){
       var p=_isHingeRod?springEnd(R,e):rodEndWorld(R,e);
       if(!p)continue;
       for(var j=0;j<_bodyCount();j++){
-        var h=bodies[j];
+        var h=_bodyAt(j);
         if(h===R||h.dead||h.kind!=='W')continue;
         /* ★★R131-32（用户：「杆靠近物体**中点**时达到吸附距离，中点应出现红点」）：
          *  **中点独立优先判定**——不再要求「先满足表面 15px」，只要中点够得着
@@ -13119,7 +13130,7 @@ function rodSnapPreviewScan(){
 /* ★★R131-34：带电荷的物体在其**质心**画 +/− 符号（正负取决于 B.charge）。 */
 function drawChargeMark(){
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B||B.dead||!B.charge)continue;
     var pos=(B.mb)?B.mb.position:{x:B.x||0,y:B.y||0};
     var sgn=(B.charge>0)?'+':'-';
@@ -13358,7 +13369,7 @@ function trailAdopt(host,src,dropPts){
   trailClearOne(src);
 }
 function trailClearAll(){
-  var i;for(i=0;i<_bodyCount();i++)trailClearOne(bodies[i]);
+  var i;for(i=0;i<_bodyCount();i++)trailClearOne(_bodyAt(i));
   for(i=0;i<freeL.length;i++)trailClearOne(freeL[i]);
 }
 /* ★★R133f（用户 2026-10-07）：「这个字符为什么用力撞到墙壁后，轨迹会自动关闭？」
@@ -13403,7 +13414,7 @@ function stepTrails(dt){
   trailTime+=dt;
   var i;
   for(i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B||B.dead)continue;
     if(trailFrozen(B))continue;               // ★「固定物体不显示」：连点都不采
     trailPush(B,B.x,B.y);
@@ -13512,7 +13523,7 @@ function drawTrails(){
   try{_ld=cvx.getLineDash();_ldo=cvx.lineDashOffset;}catch(e){}
   var i,B,d;
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(!B||B.dead)continue;
     if(trailFrozen(B))continue;
     if(trailEnabled(B))trailStrokeOne(B);
@@ -13556,7 +13567,7 @@ function render(){
     }
   }
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.frac&&B.st.bar&&!B.st.bar.dead){
       var ob=B.orb,oxB=(ob&&ob.k>=0.02&&ob.gx!=null)?(ob.gx-B.x):0,oyB=(ob&&ob.k>=0.02&&ob.gy!=null)?(ob.gy-B.y):0;
       /* ★★R132-6：分数线必须与**字形同口径缩放**。
@@ -13590,12 +13601,12 @@ function render(){
     }
   }
   for(var q=0;q<_bodyCount();q++){
-    var B2=bodies[q];
+    var B2=_bodyAt(q);
     if(B2.orb)orbGeom(B2);
   }
   // gravity formulas (GMm/r^n, complete): draw their attraction-range wireframe (dashed circle)
   for(var gv=0;gv<_bodyCount();gv++){
-    var GV=bodies[gv];
+    var GV=_bodyAt(gv);
     if(GV.kind||!GV.isWell)continue;
     cvx.strokeStyle='rgba(120,80,30,0.38)';
     cvx.lineWidth=1.5;
@@ -13608,14 +13619,14 @@ function render(){
   // t-rods (vt->plank): a thin line like the ground, but draggable & rotatable
   // R98-2：画线抽到 drawRodPlank（与器件落点虚影共用），这里只负责遍历（保持原「不滤 dead」口径）。
   for(var tr=0;tr<_bodyCount();tr++){
-    var TB=bodies[tr];
+    var TB=_bodyAt(tr);
     if(TB.kind!=='T')continue;
     drawRodPlank(TB);
   }
   // R57 弹簧（kx）：锯齿线圈。圈数随长度自适应；拉长偏红、压短偏蓝、原长墨黑；
   // 拴住的一端画一个实心锚点，用户一眼能看出「哪端接上了、哪端还悬着」。
   for(var sp2i=0;sp2i<_bodyCount();sp2i++){
-    var SPB=bodies[sp2i];
+    var SPB=_bodyAt(sp2i);
     if(SPB.kind!=='S'||SPB.dead)continue;
     // R101⑦：'S' 一族三个成员按标志分派渲染（同一份锚点约定，三套画法）。
     if(SPB.hinge)drawHinge(SPB);else if(SPB.rope)drawRope(SPB);else drawSpring(SPB);
@@ -13630,19 +13641,19 @@ function render(){
   drawBoundaries();
   // magnetic fields: dotted disc, q orbital paths, I Ampere force arrows
   for(var fb=0;fb<_bodyCount();fb++){
-    var FB=bodies[fb];
+    var FB=_bodyAt(fb);
     if(FB.kind==='B')drawFieldDots(FB.x,FB.y,FB.fieldR,FB.Bz);   /* ★9zs：传 Bz ⇒ 负值画叉 */
     else if(FB.kind==='E')drawFieldE(FB.x,FB.y,FB.fieldR,FB.th||0,FB);
   }
   for(var qo=0;qo<_bodyCount();qo++){
-    var OB=bodies[qo];
+    var OB=_bodyAt(qo);
     if(OB.kind==='q'&&OB.fieldState){
       // no orbit guide ring (motion is derived from release position + velocity)
     }else if(OB.kind==='I'){
       // Ampere force arrow: sum the pull directions of ALL covering B sources (superposition)
       var fySum=0;
       for(var ss=0;ss<_bodyCount();ss++){
-        var S3=bodies[ss];
+        var S3=_bodyAt(ss);
         if(S3.kind!=='B')continue;
         var d2=Math.hypot(OB.x-S3.x,OB.y-S3.y);
         if(d2<=S3.fieldR){
@@ -13667,7 +13678,7 @@ function render(){
   }
   // black holes: gravitational-lens rings (warped space) + dark hole + accretion ring
   for(var bhv=0;bhv<_bodyCount();bhv++){
-    var HB=bodies[bhv];
+    var HB=_bodyAt(bhv);
     if(HB.bh){
       drawBlackHole(HB);
     }
@@ -13739,7 +13750,7 @@ function drawBlackHole(B){
 function syncGlyphs(){
   var i,j,k;
   for(i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     var bar=B.st.bar;
     if(bar&&!bar.dead)bar.el.style.display='none';
       var extra=(B.pop&&B.pop>0)?popScale(B.pop):1;
@@ -13786,7 +13797,7 @@ var G_RANGE=360, G_PULL=52000;
 var G_PULL2=7.405e6;
 function stepGravity(dt){
   var gravs=[];
-  for(var g=0;g<_bodyCount();g++){var Gb=bodies[g];if(Gb.isWell)gravs.push(Gb);}
+  for(var g=0;g<_bodyCount();g++){var Gb=_bodyAt(g);if(Gb.isWell)gravs.push(Gb);}
   // NOTE: no early return even without wells — binary-star pairs (two mv²/r wholes)
   // must be able to form on their own.
   function releaseGo(Bb){
@@ -13797,7 +13808,7 @@ function stepGravity(dt){
     Bb.go=null;
   }
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.kind)continue;
     if(B.bh)continue;   // black holes do not orbit anything
     if(B.isWell)continue;
@@ -13843,7 +13854,7 @@ function stepGravity(dt){
       }
       if(!P){
         for(var pk=0;pk<_bodyCount();pk++){
-          var C=bodies[pk];
+          var C=_bodyAt(pk);
           if(C===B)continue;
           if(!isMVR(C))continue;
           if(C.go&&C.go.bin)continue;          // already holding its own pair
@@ -13920,11 +13931,11 @@ function stepGravity(dt){
 }
 function stepField(dt){
   var bsrcs=[],esrcs=[];
-  for(var i=0;i<_bodyCount();i++){var S=bodies[i];if(S.kind==='B')bsrcs.push(S);else if(S.kind==='E')esrcs.push(S);}
+  for(var i=0;i<_bodyCount();i++){var S=_bodyAt(i);if(S.kind==='B')bsrcs.push(S);else if(S.kind==='E')esrcs.push(S);}
   if(!bsrcs.length&&!esrcs.length){
     // no field source: no forces, but keep I/q clamped to the screen bounds (everything stays on screen)
     for(var kb=0;kb<_bodyCount();kb++){
-      var Kb=bodies[kb];
+      var Kb=_bodyAt(kb);
       if(Kb.kind==='B'||Kb.kind==='E'||Kb.kind==='T')continue;
       if(grab.kind==='body'&&grab.obj===Kb)continue;
       if(Kb.kind==='q'||Kb.kind==='I'){
@@ -13937,7 +13948,7 @@ function stepField(dt){
     return;
   }
   for(var j=0;j<_bodyCount();j++){
-    var O=bodies[j];
+    var O=_bodyAt(j);
     if(O.kind==='B'||O.kind==='E')continue;   // field sources don't feel their own field
     /* ★★R132-9zj（用户 2026-10-03：「这个物体获得电荷 q 后，怎么放在电磁场中没反应啊，
      *   就好像不受力一样」）。
@@ -14061,7 +14072,7 @@ function stepField(dt){
     }
   }
   for(var k=0;k<_bodyCount();k++){
-    var K=bodies[k];
+    var K=_bodyAt(k);
     if(K.kind==='B'||K.kind==='E'||K.kind==='T'||K.kind==='S')continue;
     if(K.bh)continue;
     if(K.x<24){K.x=24;K.vx=Math.abs(K.vx)*0.5;}
@@ -14359,10 +14370,10 @@ function applyWMul(B){
 function wfSelfFriction(dt){
   if(!MW||!MW.engine)return;
   var list=MW.engine.pairs.list,any=0,i,k,B,pr;
-  for(i=0;i<_bodyCount();i++)if(bodies[i]&&bodies[i]._ownFric){any=1;break;}
+  for(i=0;i<_bodyCount();i++)if(_bodyAt(i)&&_bodyAt(i)._ownFric){any=1;break;}
   if(!any)return;
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(!B||B.dead||B.kind!=='W'||!B.mb||B.mb.isStatic||!B._ownFric)continue;
     var mu=B.wFrict;
     if(!(mu>0))continue;                       // μ=0 = 真正光滑（R76 语义）
@@ -14555,7 +14566,7 @@ function refreshAllPairs(){
   if(!MW)return;
   var i,B;
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(B.kind==='W'&&B.mb){
       // ① 每帧恢复 air。R70b：只对**被调过** μ/e 的体按 R68 公式重算——未调过的体恢复
       //    出厂值（圆 BALL_AIR / 其它 0.01，与 buildMatterBody 的赋值一致）。此前无条件按
@@ -14978,7 +14989,7 @@ function perfectElasticMB(){
   var out=[];
   EL_Z.length=0;
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.dead||!B.mb)continue;
     if(wEffE(B)>=0.999)out.push(B.mb);
     else if(wMuIdeal(B))EL_Z.push(B.mb);   // R76：只收**显式** μ=0 的体（高中默认 μ=0 不算，见 wMuIdeal）
@@ -14989,7 +15000,7 @@ function perfectElasticMB(){
 }
 function snapVelocities(pre){
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i],b=B.mb;
+    var B=_bodyAt(i),b=B.mb;
     if(!b||B.dead||b.isStatic)continue;
     var e=pre[b.id];
     if(!e)e=pre[b.id]=[0,0,0];
@@ -15040,7 +15051,7 @@ function circleRestitutionFix(ev){
     if(!mA||!mB)continue;
     var BA=null,BB=null,Bc=null,i;
     for(i=0;i<_bodyCount();i++){
-      var X=bodies[i];
+      var X=_bodyAt(i);
       if(!X||X.dead||!X.mb)continue;
       if(X.mb===mA)BA=X;else if(X.mb===mB)BB=X;
     }
@@ -15109,7 +15120,7 @@ function circleRollBodies(){
   if(!MW)return null;
   var out=null;
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B||B.dead||B.kind!=='W'||!B.mb||B.wshape!=='circle'||!B.rad)continue;
     if(B.mb.isStatic||B.fixed||B.mb.isSleeping)continue;
     if(typeof grab!=='undefined'&&grab&&grab.kind==='body'&&grab.obj===B)continue;
@@ -15256,7 +15267,7 @@ function elasticContactFix(pre,EL){
     if(gd!==0){for(var gk in pre)pre[gk][1]+=gd;}
   }
   for(i5=0;i5<_bodyCount();i5++){
-    b5=bodies[i5].mb;
+    b5=_bodyAt(i5).mb;
     if(!b5||b5.dead||b5.isStatic)continue;
     var e5=pre[b5.id];
     if(e5)KE0+=0.5*b5.mass*(e5[0]*e5[0]+e5[1]*e5[1])+0.5*b5.inertia*e5[2]*e5[2];
@@ -15443,7 +15454,7 @@ function rodMirrorOf(mb){return (mb&&mb._rodRef)?mb._rodRef:null;}
 // 因为 Matter 的 solveVelocity 全程只读写 positionPrev/anglePrev，velocity 字段是步末同步出来的。
 function snapRodWPrev(pre){
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.kind!=='W'||!B.mb||B.dead||B.mb.isStatic)continue;
     var b=B.mb,e=pre[b.id];
     if(!e)e=pre[b.id]=[0,0,0];
@@ -15708,7 +15719,7 @@ function rodResolve(B){
   // **悬空**的杆上）里，落体的中心必然在杆心**上方**（它正压在杆上），于是被这条方向判据排除，
   // 老契约（悬空的杆 = 用户画的地形，不许被压穿）不受影响。静态对方照旧一律认出。
   for(var k2=0;k2<_bodyCount();k2++){
-    var O2=bodies[k2];
+    var O2=_bodyAt(k2);
     if(O2===B||O2.dead||O2.kind!=='W'||!O2.mb)continue;
     // R100①：铰链的宿主不参与支撑解算（销孔 ≠ 干涉，见 rodAnchorHostOf 注释）
     if(rodAnchorHostOf(B,O2))continue;
@@ -15784,7 +15795,7 @@ function stepMatter(dt){
   var _grabLocal=_gf?_gf.dragLocalOffset:function(){return {x:grab.glx||0,y:grab.gly||0};};
   var i,B,anyW=false;
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(B.kind==='T'&&!B.mb&&!B.dead){
       // mirror the t-rod as a kinematic static plank: a line can land on it and stay there
       // R98-1：建板参数抽到 rebuildRodMirror（与 setRodLen / 长度手柄共用同一份实现）。
@@ -15801,7 +15812,7 @@ function stepMatter(dt){
   // 被积分（rodStep），场上一个 W 都没有时它照样要能滑/能转（被字母撞、被黑洞推）。
   var RODS=[];
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(B.kind==='T'&&!B.dead)RODS.push(B);   // ★R131-21：板已删除，B.mb 恒 null——条件去掉
   }
   // R130：本帧的「圆」清单（模式化摩擦：高中=质点不自转 / 大学=纯滚动+滚阻）。
@@ -15860,7 +15871,7 @@ function stepMatter(dt){
      *   ★只在「确实连着杆」时才加第二趟 —— 绳/铰链的行为一字不改。 */
     if(typeof rodSyncAnchors==='function'){
       var _hasRod=false;
-      for(var _k=0;_k<_bodyCount();_k++){var _b2=bodies[_k];
+      for(var _k=0;_k<_bodyCount();_k++){var _b2=_bodyAt(_k);
         if(_b2&&!_b2.dead&&_b2.kind==='T'&&_b2.anc&&
            ((_b2.anc[0]&&_b2.anc[0].B===G)||(_b2.anc[1]&&_b2.anc[1].B===G))){_hasRod=true;break;}}
       if(_hasRod){var pj2=conDragConstrain(G);if(pj2){G.x=pj2.x;G.y=pj2.y;}}
@@ -15882,7 +15893,7 @@ function stepMatter(dt){
      *   ★只补「连在被拖体上的那几根杆」，不全场扫。 */
     if(typeof rodSyncAnchors==='function'){
       for(var _ri=0;_ri<_bodyCount();_ri++){
-        var _rb=bodies[_ri];
+        var _rb=_bodyAt(_ri);
         if(!_rb||_rb.dead||_rb.kind!=='T'||!_rb.anc)continue;
         var _hA=_rb.anc[0]?_rb.anc[0].B:null,_hB=_rb.anc[1]?_rb.anc[1].B:null;
         if(_hA!==G&&_hB!==G)continue;
@@ -15992,7 +16003,7 @@ function stepMatter(dt){
   // frictionAir 归零；③非极值体按 R68 公式恢复。幂等、与 applyWFrict 的手动刷新不冲突。
   if(n>0)refreshAllPairs();
   for(i=0;i<_bodyCount();i++){
-    B=bodies[i];
+    B=_bodyAt(i);
     if(B.kind!=='W'||!B.mb)continue;
     B.x=B.mb.position.x;B.y=B.mb.position.y;B.th=B.mb.angle;
     // R72-G（用户：「圆弧的地面吸附功能怎么没有」）：吸附原来只挂在「拖拽松手」那一次
@@ -16856,7 +16867,7 @@ function ropeCollidables(B){           // 可碰撞实体：一切有 Matter 体
   var ex0=(B&&B.anc[0]&&B.anc[0].B&&!B.anc[0].B.dead)?B.anc[0].B:null,
       ex1=(B&&B.anc[1]&&B.anc[1].B&&!B.anc[1].B.dead)?B.anc[1].B:null;
   for(var i=0;i<_bodyCount();i++){
-    var b=bodies[i];
+    var b=_bodyAt(i);
     if(b.dead||!b.mb||b.kind==='S')continue;
     if(b===ex0||b===ex1)continue;
     _ropeHitBuf.push(b.mb);
@@ -16893,7 +16904,7 @@ function ropeVerletStep(B,dt){
             var h3=Matter.Query.point([b3],nd3);
             if(h3&&h3.length){
               var hB3=null;
-              for(var k3=0;k3<_bodyCount();k3++)if(bodies[k3].mb===b3){hB3=bodies[k3];break;}
+              for(var k3=0;k3<_bodyCount();k3++)if(_bodyAt(k3).mb===b3){hB3=_bodyAt(k3);break;}
               if(!hB3)continue;
               var qq=(typeof hostClosestPoint==='function')?hostClosestPoint(hB3,nd3.x,nd3.y):null;
               if(qq){
@@ -16950,7 +16961,7 @@ function ropeVerletStep(B,dt){
         var hits=Matter.Query.point(mbs,{x:nd.x,y:nd.y});
         if(hits&&hits.length){
           var hitMb=hits[0],hB=null;
-          for(k=0;k<_bodyCount();k++)if(bodies[k].mb===hitMb){hB=bodies[k];break;}
+          for(k=0;k<_bodyCount();k++)if(_bodyAt(k).mb===hitMb){hB=_bodyAt(k);break;}
           if(!hB)continue;
           /* ★R131-11（用户：「绳子还是会穿透空中的物体」）：最近表面点取**本帧起始位置**
            *  （px/py=积分前位置，verlet 语义天然保留）而不是切进体内后的当前位置——
@@ -17115,7 +17126,7 @@ function releaseConstrainVel(B){
   if(!B||!B.mb||B.kind==='T')return false;
   var touched=false;
   for(var i=0;i<_bodyCount();i++){
-    var S=bodies[i];
+    var S=_bodyAt(i);
     if(S.dead||S.kind!=='S'||(!S.rope&&!S.hinge)||!S.anc)continue;
     for(var j=0;j<2;j++){
       var a=S.anc[j],oh=S.anc[1-j];
@@ -17227,7 +17238,7 @@ function conDragConstrain(B){
   if(!B||!B.mb||B.kind==='T')return null;
   var moved=false;
   for(var i=0;i<_bodyCount();i++){
-    var S=bodies[i];
+    var S=_bodyAt(i);
     if(S.dead||!S.anc)continue;
     // ★R107-1/2：**轻质杆（kind 'T'）也走同一条拖拽纪律** —— 它两端锚定时就是一根
     //   刚体连杆，漏了它就是用户看到的「拖快一点杆就变长 / 异常抖动」。
@@ -18011,7 +18022,7 @@ function devSnapEnds(B){
 function midSnapCandidate(ex,ey,skip){
   var hit=null,bd=SPR_PAD;
   for(var i=0;i<_bodyCount();i++){
-    var h=bodies[i];
+    var h=_bodyAt(i);
     if(h.dead||h===skip)continue;
     var dd=distToHost(h,ex,ey);
     if(dd<bd){bd=dd;hit=h;}
@@ -18054,7 +18065,7 @@ function midSnapCandidate(ex,ey,skip){
 function snapPickCandidate(ex,ey,skip,B){
   var hit=null,bd=SPR_PAD,i,h,dd;
   for(i=0;i<_bodyCount();i++){
-    h=bodies[i];
+    h=_bodyAt(i);
     if(h.dead||h===skip||h.kind!=='W')continue;
     dd=distToHost(h,ex,ey);
     var _dc=Math.hypot(ex-h.x,ey-h.y);
@@ -19508,7 +19519,7 @@ window.__trailStats=function(){
       cfg:(ent.trailCfg?{color:ent.trailCfg.color,dash:ent.trailCfg.dash,
         life:ent.trailCfg.life,fade:ent.trailCfg.fade}:null)});
   }
-  for(var i=0;i<_bodyCount();i++){var B=bodies[i];if(B&&!B.dead)one('body'+i+':'+(B.kind||''),B);}
+  for(var i=0;i<_bodyCount();i++){var B=_bodyAt(i);if(B&&!B.dead)one('body'+i+':'+(B.kind||''),B);}
   for(var k=0;k<freeL.length;k++){var d=freeL[k];if(d&&!d.dead)one('letter'+k+':'+(d.ch||''),d);}
   return out;
 };
@@ -19532,7 +19543,7 @@ var trayLocked=false;
 function syncTrayLock(){
   var has=false;
   for(var i=0;i<_bodyCount();i++){
-    var b=bodies[i];
+    var b=_bodyAt(i);
     if(b&&!b.dead&&b.bh&&!b.bh.dead){has=true;break;}
   }
   var bt=DD.body;
@@ -20154,7 +20165,7 @@ function drawBeltBody(B,hov){
 }
 function drawBoundaries(){
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(B.kind!=='W')continue;
     // 真带子传**本体**（_bph 要能累起来）；虚影传桩对象（纹路静止，见 drawDeviceGhost）。
     if(B.belt){drawBeltBody(B,B===hoverW);continue;}
@@ -20590,7 +20601,7 @@ function bossIsEk(B){
 function bossFindEkNear(x,y){
   var pick=null,bd=1e9;
   for(var i=0;i<_bodyCount();i++){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!bossIsEk(B))continue;
     /* ★★R132（`_tmp_r280_probe.py` 实测）：命中判据要**同时**看质心距离与墨迹包围盒。
      *  只按质心判：½mv² 被排斥后一旦漂出 80px，用户"拖回原处"照样落空；
@@ -20802,7 +20813,7 @@ function bossPlace(Ek,d){
     /* 「或者多个，多个就先融合为一个」：把其余 ½mv² 溶解掉 */
     var others=[];
     for(var i=0;i<_bodyCount();i++){
-      var O=bodies[i];
+      var O=_bodyAt(i);
       if(O!==Ek&&bossIsEk(O))others.push(O);
     }
     for(var j=0;j<others.length;j++)bossDissolveEk(others[j]);
@@ -21460,7 +21471,7 @@ function bossFinish(){
 function bossKillKept(){
   var n=0;
   for(var i=bodies.length-1;i>=0;i--){
-    var B=bodies[i];
+    var B=_bodyAt(i);
     if(!B||!B._bossKept)continue;
     if(B.glyphs)for(var j=0;j<B.glyphs.length;j++){
       var g=B.glyphs[j];

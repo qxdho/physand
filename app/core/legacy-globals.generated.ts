@@ -266,6 +266,7 @@ export const LEGACY_GLOBAL_NAMES = [
   '_EXPR_MS',
   '_EXPR_VOC',
   '_bodyAlive',
+  '_bodyAt',
   '_bodyCount',
   '_bodyRemove',
   '_bodyRemoveAt',
@@ -965,4 +966,4 @@ export const LEGACY_GLOBAL_NAMES = [
 ] as const;
 
 /** Count of declarations, for diagnostics and the sanity check in tests. */
-export const LEGACY_GLOBAL_COUNT = 950;
+export const LEGACY_GLOBAL_COUNT = 951;
