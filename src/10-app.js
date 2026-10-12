@@ -16711,6 +16711,12 @@ function setGroundAngle(B,th){
  * 调用处直接 continue（与传送带同一个做法，否则矩形框会被画两遍、盖掉符号）。 */
 var GROUND_HATCH_STEP=18;
 function drawGroundBody(B,hov){
+  /* ★★2026-10（阶段 C）：地面/墙面渲染器已切到 `app/render/bodies.ts`。
+   *  它原来读 8 个散落的数值全局（GROUND_TH/GROUND_HATCH_STEP/BND_HH/各 SPAWN_LEN），
+   *  追踪后发现那些其实是**器件规格**（同时喂给工厂、参数表默认值和渲染器）——
+   *  已收进 `app/render/device-spec.ts`，于是这里改为传规格而不是读全局。 */
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawGroundBody){_R.drawGroundBody(cvx,B,_R.groundSpec,_R.boundaryInk,hov);return;}
   if(!B||!B.gnd)return;
   var hw=B.hw||GROUND_SPAWN_LEN/2,hh=B.hh||GROUND_TH/2;
   var ink=hov?'rgba(28,58,92,1)':'rgba(38,34,28,1)';
@@ -18952,6 +18958,11 @@ function ringIsTrueCircle(B){
  * 单色化，否则「带子在往哪边跑」就没线索了；滚轮与带面统一用墨色，保持那套线稿的干净。 */
 var BELT_DECO_STEP=26;
 function drawBeltBody(B,hov){
+  /* ★★2026-10（阶段 C）：传送带渲染器已切到 `app/render/bodies.ts`。
+   *  ⚠ 保守点：`lastDt`（帧步长）作为**参数**传入，而不是让模块去读全局 ——
+   *  这样 R101④ 那条「两个整圆不能在同一子路径」的修法可以被单测钉住。 */
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawBeltBody){_R.drawBeltBody(cvx,B,_R.beltSpec,_R.boundaryInk,lastDt,hov);return;}
   if(!B||!B.belt)return;
   var hw=B.hw||BELT_SPAWN_LEN/2,hh=B.hh||BELT_TH/2;
   B._bph=((B._bph||0)+(B.conv||0)*lastDt)%BELT_DECO_STEP;

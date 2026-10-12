@@ -44,6 +44,8 @@ import { installViewportFacade } from './core/viewport';
 import { drawParticles } from './render/particles';
 import { drawBlackHole, drawHinge, drawRope, drawSnapMarker } from './render/devices';
 import { boxExtentAlong, drawFieldDots, drawRodPlank } from './render/field';
+import { drawBeltBody, drawGroundBody } from './render/bodies';
+import { BOUNDARY_INK, beltSpec, groundSpec } from './render/device-spec';
 
 // Side-effect imports: these modules perform the `params.register(...)` calls.
 // Without them the registry is EMPTY at boot, the hook claims no ids, and the
@@ -182,6 +184,13 @@ function boot(): void {
     drawFieldDots,
     drawRodPlank,
     boxExtentAlong,
+    drawGroundBody,
+    drawBeltBody,
+    // Device spec values the two body renderers need, published rather than
+    // duplicated so the legacy path and the module cannot drift apart.
+    groundSpec: groundSpec(),
+    beltSpec: beltSpec(),
+    boundaryInk: BOUNDARY_INK,
   };
   evaluateAsClassicScript(
     appSource,

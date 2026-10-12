@@ -354,8 +354,12 @@ test('geometry-dependent renderers are not extracted yet', () => {
    */
   /* field.ts cleared the same way: zero key globals, and its only external calls
    are to pure helpers (rgba) that were verified stateless. */
-  const approved = new Set(['surface', 'particles', 'devices', 'field']);
-  const unapproved = extracted.filter((f) => !approved.has(f));
+  /* Data modules are not renderers: device-spec.ts holds constants and no
+   * drawing code at all, so it is exempt from the cleared-for-extraction
+   * question rather than being approved through it. */
+  const dataOnly = new Set(['device-spec']);
+  const approved = new Set(['surface', 'particles', 'devices', 'field', 'bodies']);
+  const unapproved = extracted.filter((f) => !approved.has(f) && !dataOnly.has(f));
   assert.deepEqual(
     unapproved,
     [],
