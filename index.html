@@ -5930,7 +5930,13 @@ function layoutField(B){
 function applyInkScale(B){
   var sp=(B.scaleParam!=null)?B.scaleParam:1;
   if(!(sp>0))sp=1;
-  if(sp===1&&!B._inkBase)return;              // 没缩过、也没缩放过 ⇒ 无事可做
+  /* ★★2026-10：**宽 / 高独立缩放**。原来只有等比 `scaleParam`，想把方块拉成长条做不到。
+   *  两个新字段 wScaleX / wScaleY（默认 1）与 scaleParam **相乘**（等比 × 分轴），
+   *  所以「先等比 2×，再单独把宽拉 1.5×」= 宽 3×、高 2× —— 直觉、可逆、不累积。 */
+  var sx=(B.wScaleX!=null&&B.wScaleX>0)?B.wScaleX:1;
+  var sy=(B.wScaleY!=null&&B.wScaleY>0)?B.wScaleY:1;
+  var fx=sp*sx, fy=sp*sy;
+  if(fx===1&&fy===1&&!B._inkBase)return;      // 没缩过、也没缩放过 ⇒ 无事可做
   if(!B.pts||!B.pts.length)return;
   if(!B._inkBase){
     /* 第一次缩放：把当前顶点存成基准（深拷贝，且此后不再改动，
@@ -5939,10 +5945,9 @@ function applyInkScale(B){
     for(var i=0;i<B.pts.length;i++)B._inkBase.push([B.pts[i][0],B.pts[i][1]]);
     if(B.rad!=null&&B.radB==null)B.radB=B.rad;
   }
-  var sc=(sp===1)?null:sp;
   B.pts=[];
   for(var j=0;j<B._inkBase.length;j++){
-    B.pts.push(sc?[B._inkBase[j][0]*sc,B._inkBase[j][1]*sc]:[B._inkBase[j][0],B._inkBase[j][1]]);
+    B.pts.push([B._inkBase[j][0]*fx,B._inkBase[j][1]*fy]);
   }
   /* ② 重算 hw/hh 并重建碰撞体。hull 必须作废 —— 它是 pts 的缓存。 */
   var mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
@@ -5953,6 +5958,9 @@ function applyInkScale(B){
   }
   B.hw=Math.max(6,(mxx-mnx)/2);B.hh=Math.max(6,(mxy-mny)/2);
   B.hull=null;
+  /* 圆 / 弧的半径只跟**等比**分量走：分轴拉伸会把圆变成椭圆，而碰撞壳与渲染都按
+   * rad 画正圆 ⇒ 硬拉会让「看到的形状」和「撞到的形状」分家。所以分轴对圆形不生效
+   * （面板对圆形也只给等比那一行，见 app/params/w-body.ts）。 */
   if(B.rad!=null)B.rad=(B.radB||B.rad)*sp;
   if(typeof rebuildWBody==='function')rebuildWBody(B,B.th||0);
 }

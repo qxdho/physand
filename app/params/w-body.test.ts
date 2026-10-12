@@ -20,7 +20,15 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { W_DEFAULTS, W_RANGES, wScale, wCharge } from './w-body.ts';
+import {
+  W_DEFAULTS,
+  W_RANGES,
+  wScale,
+  wCharge,
+  wWidth,
+  wHeight,
+  wFixed,
+} from './w-body.ts';
 import { params } from '../core/param-registry.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -166,3 +174,129 @@ test('write path clamps a non-positive size back to the default', () => {
 function wMassSpec() {
   return params.get('wmass');
 }
+
+/* --------------------------------------------------------------------------
+ * WIDTH / HEIGHT — the "parameters aren't rich enough" complaint
+ * ------------------------------------------------------------------------ */
+
+test('width and height are separate parameters, not one uniform scale', () => {
+  // Uniform `scale` alone cannot turn a square into a plank. These two must be
+  // independently addressable and must write DIFFERENT body fields.
+  assert.notEqual(wWidth.id, wHeight.id);
+  assert.notEqual(wWidth.id, wScale.id);
+
+  const body: Record<string, any> = { kind: 'W' };
+  wWidth.write(body, 2);
+  assert.equal(body.wScaleX, 2, 'width writes wScaleX');
+  assert.equal(body.wScaleY, undefined, 'and must not touch the height factor');
+
+  wHeight.write(body, 1.5);
+  assert.equal(body.wScaleY, 1.5, 'height writes wScaleY');
+  assert.equal(body.wScaleX, 2, 'and must not disturb the width factor');
+});
+
+test('axis factors default to 1 so a fresh body is untouched', () => {
+  assert.equal(wWidth.def, 1);
+  assert.equal(wHeight.def, 1);
+  assert.equal(wWidth.read({ kind: 'W' }), 1);
+  assert.equal(wHeight.read({ kind: 'W' }), 1);
+});
+
+test('a non-positive axis factor falls back to 1 rather than collapsing the shape', () => {
+  const body: Record<string, any> = { kind: 'W' };
+  wWidth.write(body, 0);
+  assert.equal(body.wScaleX, 1);
+  wHeight.write(body, -3);
+  assert.equal(body.wScaleY, 1);
+});
+
+test('width/height are NOT offered for circles or arcs', () => {
+  // The collider and the renderer draw circles from `rad`, so a non-uniform
+  // stretch would make the visible shape and the collidable shape disagree.
+  // Showing a control that silently lies about geometry is worse than hiding it.
+  const circle = { kind: 'W', wshape: 'circle', rad: 30 };
+  assert.equal(wWidth.scope.when!(circle), false, 'circle must not expose width');
+  assert.equal(wHeight.scope.when!(circle), false, 'circle must not expose height');
+
+  const arc = { kind: 'W', ell: { a0: 0, a1: 1 } };
+  assert.equal(wWidth.scope.when!(arc), false, 'arc must not expose width');
+
+  // A plain polygon still does.
+  assert.equal(wWidth.scope.when!({ kind: 'W', wshape: 'poly' }), true);
+});
+
+test('width/height write path calls refresh() to rebuild the collider', () => {
+  const calls: string[] = [];
+  const g = globalThis as Record<string, any>;
+  const had = 'refresh' in g;
+  const prev = g.refresh;
+  g.refresh = (b: any) => calls.push(b.id);
+  try {
+    const body: Record<string, any> = { id: 'w1', kind: 'W' };
+    wWidth.write(body, 2);
+    wHeight.write(body, 1.5);
+    assert.deepEqual(calls, ['w1', 'w1'], 'both axes must rebuild geometry');
+  } finally {
+    if (had) g.refresh = prev;
+    else delete g.refresh;
+  }
+});
+
+/* --------------------------------------------------------------------------
+ * FIXED — an existing capability that was only reachable from the menu
+ * ------------------------------------------------------------------------ */
+
+test('fixed reads the body flag and defaults to off', () => {
+  assert.equal(wFixed.def, 0);
+  assert.equal(wFixed.read({ kind: 'W' }), 0);
+  assert.equal(wFixed.read({ kind: 'W', fixed: true }), 1);
+});
+
+test('fixed write sets the flag, mirrors Matter.setStatic and wakes the body', () => {
+  const calls: string[] = [];
+  const g = globalThis as Record<string, any>;
+  const hadMatter = 'Matter' in g;
+  const prevMatter = g.Matter;
+  g.Matter = {
+    Body: {
+      setStatic: (_mb: unknown, on: boolean) => calls.push(`static:${on}`),
+    },
+    Sleeping: {
+      set: (_mb: unknown, awake: boolean) => calls.push(`sleep:${awake}`),
+    },
+  };
+  try {
+    const mb = { isStatic: false };
+    const body: Record<string, any> = { kind: 'W', mb };
+
+    wFixed.write(body, 1);
+    assert.equal(body.fixed, true);
+    // Mirroring the legacy menu toggle exactly: setStatic AND wake, because a
+    // sleeping body that becomes static would otherwise stay stuck.
+    assert.deepEqual(calls, ['static:true', 'sleep:false']);
+
+    calls.length = 0;
+    wFixed.write(body, 0);
+    assert.equal(body.fixed, false);
+    assert.deepEqual(calls, ['static:false', 'sleep:false']);
+  } finally {
+    if (hadMatter) g.Matter = prevMatter;
+    else delete g.Matter;
+  }
+});
+
+test('fixed is hidden for devices that are already immovable', () => {
+  assert.equal(wFixed.scope.when!({ kind: 'W', belt: true }), false, 'belt is already fixed');
+  assert.equal(wFixed.scope.when!({ kind: 'W', gnd: 1 }), false, 'ground is already fixed');
+  assert.equal(wFixed.scope.when!({ kind: 'W' }), true);
+});
+
+test('the W parameter set exposes the new knobs and stays a superset of the old', () => {
+  const ids = params.forBody({ kind: 'W', wshape: 'poly' }).map((s) => s.id);
+  for (const required of ['wmass', 'wfrict', 'wbounc', 'wair', 'scale']) {
+    assert.ok(ids.includes(required), `must still offer ${required}`);
+  }
+  for (const added of ['wscaleX', 'wscaleY', 'wfixed']) {
+    assert.ok(ids.includes(added), `must now offer ${added}`);
+  }
+});

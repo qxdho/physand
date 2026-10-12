@@ -12,12 +12,12 @@
 
 项目正处于**从「手工拼接的单文件」到「现代 Web 应用」的渐进式迁移**中。
 
-**两套构建目前并存，且都通过全部 11 条回归测试：**
+**两套构建目前并存，且都通过全部 14 条回归测试：**
 
 | 目标 | 命令 | 产物 | 状态 |
 |---|---|---|---|
-| 传统单文件 | `npm run legacy:build` | `index.html` | ✅ 11/11 通过 |
-| 新架构 | `npm run build` | `dist/` | ✅ 11/11 通过 |
+| 传统单文件 | `npm run legacy:build` | `index.html` | ✅ 14/14 通过 |
+| 新架构 | `npm run build` | `dist/` | ✅ 14/14 通过 |
 
 **同一个测试套件、同一批基线**跑在这两个目标上 —— 这就是「重构没有改变行为」的证明。
 
@@ -168,15 +168,16 @@ ES module 的 `import` 会**提升**并在模块体之前求值，所以不能�
 
 ### 4.1 回归测试（安全网）
 
-11 条场景覆盖物理核心：
+14 条场景覆盖物理核心：
 
 ```
 empty-steady  shape-freefall  shape-rest-on-ground  two-shapes-stack  circle-roll
 rod-static-anchors  belt-static  rod-anchored-swing  spring-hanging-mass
 shape-resize-scaled  shape-resize-identity
+shape-stretch-width  shape-stretch-identity  shape-fixed-holds
 ```
 
-另有 **31 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
+另有 **40 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
 
 ```bash
 npm run test:unit # 新模块单测（最快，先跑）
@@ -257,11 +258,25 @@ UI、渲染、BOSS/黑洞状态机、轨迹、面板、公式拼装、绳、传�
 
 ### ⬜ 阶段 D —— 可扩展性与产品功能
 
-- 🚧 **插件式参数注册表**（`app/core/param-registry.ts`，13 条单测）
-- 🚧 **W 体参数已迁移**（`app/params/w-body.ts`，11 条单测）—— 含**尺寸可直接调**
-- ⬜ 其余 27 个参数迁移到注册表，并接入真实面板（替换遗留 `paramDef`/`paramV`/`applyParam`）
-- ⬜ 参数集进一步扩充（宽高独立调节、密度、静/动摩擦分离等）
+- ✅ **插件式参数注册表**（`app/core/param-registry.ts`，13 条单测）
+- ✅ **W 体参数已迁移并接入真实面板**（`app/params/w-body.ts`，18 条单测）
+  - 面板从 **4 行** 扩到 **8 行**：质量 / 摩擦 / 弹性 / 空气 / **尺寸 / 宽度 / 高度 / 固定**
+  - 宽高独立 ⇒ 可以把方块拉成长条（等比 `scale` 做不到）
+  - 「固定」原本只在右键**菜单**里，现在参数面板也能开
+- ⬜ 其余约 24 个参数迁移到注册表
+- ⬜ 参数集继续扩充（密度、静/动摩擦分离、材质预设等）
 - ⬜ 文档重写
+
+#### 已落地的产品改进（本轮）
+
+| 改进 | 机制 |
+|---|---|
+| 物块可调大小 | `scale` 不再要求先挂 `r` 字母（配 `applyInkScale` 修好崩溃与真正缩放） |
+| 宽 / 高独立 | 新增 `wscaleX` / `wscaleY`，与 `scale` 相乘、可逆不累积 |
+| 固定开关 | `wfixed` 把原本只在菜单里的能力搬到参数面板 |
+| 圆形/弧不出宽高 | `scope.when` 排除——碰撞壳与渲染都按 `rad` 画正圆，硬拉会让「看到的」和「撞到的」分家 |
+
+> 三个新参数**各自只写一处声明**即完成定义、显示条件、读取、写入 —— 这正是注册表要证明的事。
 
 #### 参数注册表：为什么它能根治「改了没反应」
 

@@ -221,4 +221,74 @@ export const SCENARIOS = [
     },
     steps: [{ n: 30 }, { n: 90 }, { n: 120 }],
   },
+
+  /* ------------------------------------------------------------------------
+   * NON-UNIFORM RESIZE + FIXED TOGGLE
+   *
+   * These cover the parameters added for "参数调节并不丰富": independent width
+   * and height (uniform `scale` alone cannot turn a square into a plank), and a
+   * fixed/pin toggle that previously existed only in the right-click menu.
+   *
+   * The stretched case matters physically, not just visually: the collider is
+   * rebuilt from the scaled ink points, so a wrong `hull` invalidation would
+   * leave the body resting at the wrong height or falling through.
+   *
+   * TARGET NOTE: `wscaleX` / `wscaleY` / `wfixed` are registry-only parameters,
+   * so they exist in the Vite build (where `bridgeParamDefs()` synthesizes their
+   * PARAM_DEFS entries) but NOT in the frozen legacy single-file build. The
+   * helpers below therefore guard on availability and fall back to writing the
+   * body field directly, which keeps both targets runnable and comparable —
+   * the legacy build simply exercises the same physics through the raw field.
+   * ------------------------------------------------------------------------ */
+
+  {
+    id: 'shape-stretch-width',
+    doc: 'A square stretched 3x wide (height unchanged) must rest on the ground with the ' +
+         'STRETCHED collider — catches hull-cache invalidation bugs in non-uniform resize.',
+    setup: () => {
+      makeGround(640, 720, 1200);
+      const sq = mkBoundary(
+        [[400, 140], [460, 140], [460, 180], [400, 180]],
+        { shape: 'poly', closed: true },
+      );
+      setAxisScale(sq, 'wscaleX', 'wScaleX', 3);
+      return true;
+    },
+    steps: [{ n: 30 }, { n: 90 }, { n: 120 }],
+  },
+
+  {
+    id: 'shape-stretch-identity',
+    doc: 'Stretching both axes then restoring must return to the exact original geometry. ' +
+         'Guards against cumulative growth across the two axis factors.',
+    setup: () => {
+      makeGround(640, 720, 1200);
+      const sq = mkBoundary(
+        [[400, 140], [460, 140], [460, 180], [400, 180]],
+        { shape: 'poly', closed: true },
+      );
+      setAxisScale(sq, 'wscaleX', 'wScaleX', 2.5);
+      setAxisScale(sq, 'wscaleY', 'wScaleY', 1.8);
+      setAxisScale(sq, 'wscaleX', 'wScaleX', 1);
+      setAxisScale(sq, 'wscaleY', 'wScaleY', 1);
+      return true;
+    },
+    steps: [{ n: 30 }, { n: 90 }, { n: 120 }],
+  },
+
+  {
+    id: 'shape-fixed-holds',
+    doc: 'A body toggled to fixed must hang in mid-air instead of falling. ' +
+         'Covers the parameter-panel path for the pin toggle (previously menu-only).',
+    setup: () => {
+      makeGround(640, 720, 1200);
+      const sq = mkBoundary(
+        [[400, 200], [480, 200], [480, 260], [400, 260]],
+        { shape: 'poly', closed: true },
+      );
+      setFixed(sq, true);
+      return true;
+    },
+    steps: [{ n: 60 }, { n: 120 }],
+  },
 ];

@@ -166,6 +166,93 @@ export const wScale: ParamSpec = params.register({
   },
 });
 
+/**
+ * WIDTH / HEIGHT — non-uniform resize.
+ *
+ * Motivation: uniform `scale` cannot turn a square into a plank. Both factors
+ * multiply with `scale` (see `applyInkScale`), so "2x overall, then stretch the
+ * width 1.5x" yields 3x wide by 2x tall — intuitive and reversible.
+ *
+ * NOT offered for circles or arcs: the collision shell and the renderer both
+ * draw them from `rad`, so a non-uniform stretch would make the visible shape
+ * and the collidable shape disagree. Exposing a control that visibly does
+ * nothing (or worse, lies about the geometry) is exactly the "don't show the
+ * user a knob that cannot work" rule the legacy code documented.
+ */
+function isStretchableShape(b: AnyBody): boolean {
+  if (!isDrawableShape(b)) return false;
+  if (b.wshape === 'circle' || b.rad != null) return false;
+  if (b.ell) return false; // arc: geometry is derived from an ellipse spec
+  return true;
+}
+
+/** Both axis factors share this range: 0.2x .. 3x. */
+const AXIS_RANGE = { min: 0.2, max: 3, step: 0.05 } as const;
+
+export const wWidth: ParamSpec = params.register({
+  id: 'wscaleX',
+  label: '宽度 width',
+  unit: '×',
+  ...AXIS_RANGE,
+  def: 1,
+  group: '本体',
+  scope: { when: isStretchableShape },
+  read: (b) => (b && b.wScaleX != null ? b.wScaleX : 1),
+  write: (b, v) => {
+    b.wScaleX = v > 0 ? v : 1;
+    const refresh = (globalThis as any).refresh;
+    if (typeof refresh === 'function') refresh(b);
+  },
+});
+
+export const wHeight: ParamSpec = params.register({
+  id: 'wscaleY',
+  label: '高度 height',
+  unit: '×',
+  ...AXIS_RANGE,
+  def: 1,
+  group: '本体',
+  scope: { when: isStretchableShape },
+  read: (b) => (b && b.wScaleY != null ? b.wScaleY : 1),
+  write: (b, v) => {
+    b.wScaleY = v > 0 ? v : 1;
+    const refresh = (globalThis as any).refresh;
+    if (typeof refresh === 'function') refresh(b);
+  },
+});
+
+/**
+ * FIXED — pin a body in place.
+ *
+ * The capability already existed but only in the right-click MENU
+ * (`menuBody.fixed = !menuBody.fixed`, legacy 6396), so it was invisible to
+ * anyone who opened the parameter panel looking for it. This is a pure
+ * relocation of an existing, already-tested behaviour — no new physics.
+ *
+ * Implemented via the same body-flag + Matter `setStatic` pair the menu uses,
+ * including waking the body so a sleeping static body cannot stay stuck.
+ */
+export const wFixed: ParamSpec = params.register({
+  id: 'wfixed',
+  label: '固定 fixed',
+  min: 0,
+  max: 1,
+  step: 1,
+  def: 0,
+  group: '本体',
+  scope: { kinds: ['W'], when: (b) => !b.belt && !b.gnd },
+  read: (b) => (b && b.fixed ? 1 : 0),
+  write: (b, v) => {
+    const on = v >= 0.5;
+    b.fixed = on;
+    const Matter = (globalThis as any).Matter;
+    if (b.mb && Matter?.Body?.setStatic) {
+      Matter.Body.setStatic(b.mb, on);
+      if (Matter.Sleeping?.set) Matter.Sleeping.set(b.mb, false);
+    }
+  },
+});
+
 /** Charge, only once the body has been given one. */
 export const wCharge: ParamSpec = params.register({
   id: 'wcharge',
@@ -188,5 +275,8 @@ export const W_PARAMS: readonly ParamSpec[] = [
   wBounce,
   wAir,
   wScale,
+  wWidth,
+  wHeight,
+  wFixed,
   wCharge,
 ];

@@ -65,6 +65,33 @@ const LIB_DIRS = [
 /** Inject the test API into the page. Kept small and explicit. */
 const TEST_API = `
 window.__T = (function(){
+  /* Set one axis scale factor.
+   *
+   * Registry-backed parameters exist only in the Vite build (bridgeParamDefs
+   * synthesizes their PARAM_DEFS entries there). The frozen legacy single-file
+   * build has no such entries, so we fall back to writing the body field and
+   * calling refresh() directly — the same effect through the same physics, which
+   * keeps both targets runnable and their baselines comparable.
+   */
+  function setAxisScale(B, specId, field, value){
+    var spec = (typeof PARAM_DEFS!=='undefined') ? PARAM_DEFS[specId] : null;
+    if(spec && typeof applyParam==='function'){ applyParam(B, spec, value); return; }
+    B[field] = value;
+    if(typeof refresh==='function') refresh(B);
+  }
+
+  /* Pin / unpin a body. Mirrors the legacy menu toggle exactly:
+   * body flag + Matter setStatic + wake. */
+  function setFixed(B, on){
+    var spec = (typeof PARAM_DEFS!=='undefined') ? PARAM_DEFS['wfixed'] : null;
+    if(spec && typeof applyParam==='function'){ applyParam(B, spec, on?1:0); return; }
+    B.fixed = !!on;
+    if(B.mb && typeof Matter!=='undefined' && Matter.Body){
+      Matter.Body.setStatic(B.mb, !!on);
+      if(Matter.Sleeping) Matter.Sleeping.set(B.mb, false);
+    }
+  }
+
   // Advance the simulation by n steps of fixed dt.
   // Mirrors the self-evolution half of frame() (see index.html ~L21195).
   function step(n, dt){
@@ -126,8 +153,15 @@ window.__T = (function(){
     return out;
   }
 
-  return {step:step, snap:snap};
+  return {step:step, snap:snap, setAxisScale:setAxisScale, setFixed:setFixed};
 })();
+
+/* Scenario setup bodies are compiled with \`new Function('T', ...)\`, so they can
+ * reach the helpers either as \`T.setFixed(...)\` or as bare globals. Publishing
+ * them keeps scenario source readable and matches how the legacy app's own
+ * factory functions (makeGround, makeRod, ...) are already reached. */
+window.setAxisScale = window.__T.setAxisScale;
+window.setFixed = window.__T.setFixed;
 `;
 
 /**
