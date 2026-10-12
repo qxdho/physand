@@ -1,0 +1,214 @@
+/**
+ * Tests for the legacy bridge — the single typed surface where the new
+ * architecture touches the still-global legacy app.
+ *
+ * Run: node --test app/core/
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  bodies,
+  freeLetters,
+  physMode,
+  toolState,
+  gravity,
+  setGravity,
+  timeScale,
+  setTimeScale,
+  paramLetter,
+  paramSpec,
+  legacyParamDefsTable,
+  matterNamespace,
+  matterWorld,
+  callLegacy,
+  refreshBody,
+  isBooted,
+  constant,
+  setGlobal,
+} from './legacy.ts';
+
+/** Save/restore a set of globals so cases cannot leak into each other. */
+function withGlobals<T>(values: Record<string, unknown>, fn: () => T): T {
+  const g = globalThis as Record<string, unknown>;
+  const saved = new Map<string, { had: boolean; value: unknown }>();
+  for (const k of Object.keys(values)) {
+    saved.set(k, { had: k in g, value: g[k] });
+    g[k] = values[k];
+  }
+  try {
+    return fn();
+  } finally {
+    for (const [k, prev] of saved) {
+      if (prev.had) g[k] = prev.value;
+      else delete g[k];
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Pre-boot tolerance
+ *
+ * These accessors are used from unit tests where the legacy app does not exist.
+ * Throwing would make every module that reads state untestable in isolation, so
+ * absent state must degrade to a neutral default instead.
+ * ------------------------------------------------------------------------ */
+
+test('accessors degrade to neutral defaults before boot', () => {
+  const g = globalThis as Record<string, unknown>;
+  const saved = { bodies: g.bodies, freeL: g.freeL, PHYS_MODE: g.PHYS_MODE, TOOL: g.TOOL, GRAV: g.GRAV, TIME_SCALE: g.TIME_SCALE };
+  delete g.bodies;
+  delete g.freeL;
+  delete g.PHYS_MODE;
+  delete g.TOOL;
+  delete g.GRAV;
+  delete g.TIME_SCALE;
+  try {
+    assert.deepEqual(bodies(), [], 'bodies -> empty array');
+    assert.deepEqual(freeLetters(), [], 'freeL -> empty array');
+    assert.equal(physMode(), 'uni', 'physics mode -> university default');
+    assert.deepEqual(toolState(), { mode: 'pen' }, 'tool -> neutral pen');
+    assert.equal(gravity(), 0);
+    assert.equal(timeScale(), 1, 'time scale -> 1 (unscaled)');
+    assert.equal(paramLetter(), null);
+    assert.equal(paramSpec('anything'), undefined);
+    assert.equal(matterNamespace(), undefined);
+    assert.equal(matterWorld(), undefined);
+    assert.equal(isBooted(), false);
+  } finally {
+    Object.assign(g, saved);
+  }
+});
+
+test('callLegacy returns undefined for an absent function instead of throwing', () => {
+  // Unit tests have no legacy app; a throw here would force every test to stub
+  // the whole world just to exercise a parameter write.
+  assert.equal(callLegacy('refresh', { x: 0, y: 0 }), undefined);
+  assert.equal(refreshBody({ x: 0, y: 0 }), undefined);
+});
+
+/* --------------------------------------------------------------------------
+ * Live reads
+ * ------------------------------------------------------------------------ */
+
+test('bodies() returns the live array by reference, not a copy', () => {
+  // A copy would make writes through the bridge silently vanish.
+  const arr = [{ kind: 'W', x: 1, y: 2 }];
+  withGlobals({ bodies: arr }, () => {
+    assert.equal(bodies(), arr, 'same reference');
+    arr.push({ kind: 'W', x: 3, y: 4 });
+    assert.equal(bodies().length, 2, 'mutation through the original is visible');
+    assert.equal(isBooted(), true);
+  });
+});
+
+test('callLegacy forwards arguments and returns the real value', () => {
+  const seen: unknown[][] = [];
+  withGlobals(
+    {
+      refresh: (b: unknown) => {
+        seen.push([b]);
+        return 'refreshed';
+      },
+    },
+    () => {
+      const body = { x: 0, y: 0 };
+      assert.equal(callLegacy('refresh', body), 'refreshed');
+      assert.deepEqual(seen, [[body]]);
+    },
+  );
+});
+
+test('refreshBody routes through the legacy refresh', () => {
+  let called = 0;
+  withGlobals(
+    {
+      refresh: () => {
+        called++;
+      },
+    },
+    () => {
+      refreshBody({ x: 1, y: 2 });
+      assert.equal(called, 1);
+    },
+  );
+});
+
+test('scalar globals round-trip', () => {
+  withGlobals({ GRAV: 2600, TIME_SCALE: 1 }, () => {
+    assert.equal(gravity(), 2600);
+    setGravity(3000);
+    assert.equal(gravity(), 3000);
+
+    assert.equal(timeScale(), 1);
+    setTimeScale(0.25);
+    assert.equal(timeScale(), 0.25);
+
+    setGlobal('PX_PER_M', 260);
+    assert.equal(constant('PX_PER_M', 0), 260);
+  });
+});
+
+test('constant() falls back when the value is absent or non-numeric', () => {
+  // Guards against a typo'd constant name yielding undefined and poisoning a
+  // parameter default with NaN.
+  const g = globalThis as Record<string, unknown>;
+  const saved = g.__PHYSAND_TEST_CONST;
+  try {
+    delete g.__PHYSAND_TEST_CONST;
+    assert.equal(constant('__PHYSAND_TEST_CONST', 42), 42, 'absent -> fallback');
+
+    g.__PHYSAND_TEST_CONST = 'not a number';
+    assert.equal(constant('__PHYSAND_TEST_CONST', 42), 42, 'non-numeric -> fallback');
+
+    g.__PHYSAND_TEST_CONST = NaN;
+    assert.equal(constant('__PHYSAND_TEST_CONST', 42), 42, 'NaN -> fallback');
+
+    g.__PHYSAND_TEST_CONST = 7;
+    assert.equal(constant('__PHYSAND_TEST_CONST', 42), 7, 'numeric -> value');
+  } finally {
+    if (saved === undefined) delete g.__PHYSAND_TEST_CONST;
+    else g.__PHYSAND_TEST_CONST = saved;
+  }
+});
+
+test('paramSpec and the defs table reach the live PARAM_DEFS', () => {
+  const table = { wmass: { key: 'wmass', label: '质量', min: 0.2, max: 5, step: 0.1, def: 1 } };
+  withGlobals({ PARAM_DEFS: table }, () => {
+    assert.equal(paramSpec('wmass')?.label, '质量');
+    assert.equal(paramSpec('nope'), undefined);
+    // Must be the live object: panel-bridge ADDS entries to it, and a copy
+    // would silently drop every registry-only parameter from the panel.
+    assert.equal(legacyParamDefsTable(), table);
+  });
+});
+
+test('matterNamespace and matterWorld read through', () => {
+  const Matter = { Body: { setStatic: () => {} } };
+  const MW = { engine: { gravity: { y: 2.6 } } };
+  withGlobals({ Matter, MW }, () => {
+    assert.equal(matterNamespace(), Matter);
+    assert.equal(matterWorld(), MW);
+    assert.equal(matterWorld()?.engine?.gravity?.y, 2.6);
+  });
+});
+
+test('physMode reflects the live value so mode-dependent defaults agree', () => {
+  // w-friction defaults to 0 in high-school mode; reading a stale mode would
+  // make the panel show one number while physics uses another — the exact
+  // "shows 0 but still has friction" complaint the legacy code fixed in R76.
+  withGlobals({ PHYS_MODE: 'high' }, () => {
+    assert.equal(physMode(), 'high');
+  });
+  withGlobals({ PHYS_MODE: 'uni' }, () => {
+    assert.equal(physMode(), 'uni');
+  });
+});
+
+test('freeLetters and paramLetter read the live letter state', () => {
+  const letters = [{ ch: 'v', state: 'free' }];
+  withGlobals({ freeL: letters, paramLetter: letters[0] }, () => {
+    assert.equal(freeLetters(), letters);
+    assert.equal(paramLetter(), letters[0]);
+  });
+});

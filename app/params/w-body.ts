@@ -31,6 +31,7 @@
  *     identical. They are asserted against the legacy source by a test.
  */
 import { params, type AnyBody, type ParamSpec } from '../core/param-registry.ts';
+import { matterNamespace, physMode, refreshBody } from '../core/legacy.ts';
 
 /** Legacy defaults, mirrored so the registry cannot silently drift from them. */
 export const W_DEFAULTS = {
@@ -84,8 +85,8 @@ export const wMass: ParamSpec = params.register({
     b.mMul = v;
     b.mass = v;
     if (b.mb && b._natMass && !b.mb.isStatic) {
-      const Matter = (globalThis as any).Matter;
-      if (Matter?.Body?.setMass) Matter.Body.setMass(b.mb, b._natMass * v);
+      const Matter = matterNamespace();
+      Matter?.Body?.setMass?.(b.mb, b._natMass * v);
     }
   },
 });
@@ -101,8 +102,7 @@ export const wFriction: ParamSpec = params.register({
   read: (b) => {
     if (!b || b.kind !== 'W') return W_DEFAULTS.friction;
     // Legacy: high-school mode defaults mu to 0 (R76).
-    const mode = (globalThis as any).PHYS_MODE;
-    return b.wFrict != null ? b.wFrict : mode === 'high' ? 0 : W_DEFAULTS.friction;
+    return b.wFrict != null ? b.wFrict : physMode() === 'high' ? 0 : W_DEFAULTS.friction;
   },
   write: (b, v) => {
     b.wFrict = v;
@@ -161,8 +161,7 @@ export const wScale: ParamSpec = params.register({
   write: (b, v) => {
     b.scaleParam = v > 0 ? v : W_DEFAULTS.scale;
     if (b.isWell) b.wellR = (b.baseWellR || 360) * b.scaleParam;
-    const refresh = (globalThis as any).refresh;
-    if (typeof refresh === 'function') refresh(b);
+    refreshBody(b);
   },
 });
 
@@ -200,8 +199,7 @@ export const wWidth: ParamSpec = params.register({
   read: (b) => (b && b.wScaleX != null ? b.wScaleX : 1),
   write: (b, v) => {
     b.wScaleX = v > 0 ? v : 1;
-    const refresh = (globalThis as any).refresh;
-    if (typeof refresh === 'function') refresh(b);
+    refreshBody(b);
   },
 });
 
@@ -216,8 +214,7 @@ export const wHeight: ParamSpec = params.register({
   read: (b) => (b && b.wScaleY != null ? b.wScaleY : 1),
   write: (b, v) => {
     b.wScaleY = v > 0 ? v : 1;
-    const refresh = (globalThis as any).refresh;
-    if (typeof refresh === 'function') refresh(b);
+    refreshBody(b);
   },
 });
 
@@ -245,10 +242,10 @@ export const wFixed: ParamSpec = params.register({
   write: (b, v) => {
     const on = v >= 0.5;
     b.fixed = on;
-    const Matter = (globalThis as any).Matter;
+    const Matter = matterNamespace();
     if (b.mb && Matter?.Body?.setStatic) {
       Matter.Body.setStatic(b.mb, on);
-      if (Matter.Sleeping?.set) Matter.Sleeping.set(b.mb, false);
+      Matter.Sleeping?.set?.(b.mb, false);
     }
   },
 });

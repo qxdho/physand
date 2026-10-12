@@ -20,17 +20,7 @@
  *    a body whose mass symbol is `M`). They are independently tunable.
  */
 import { params, type AnyBody, type ParamSpec } from '../core/param-registry.ts';
-
-/** Read a legacy global numeric constant (e.g. GRAV, PX_PER_M). */
-function G(name: string, fallback: number): number {
-  const v = (globalThis as unknown as Record<string, unknown>)[name];
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-/** Set a legacy global. */
-function setG(name: string, value: number): void {
-  (globalThis as unknown as Record<string, unknown>)[name] = value;
-}
+import { constant as G, setGlobal as setG, matterWorld } from '../core/legacy.ts';
 
 /** Clamp helper matching the legacy `clamp(v, lo, hi)` semantics. */
 function clamp(v: number, lo: number, hi: number): number {
@@ -100,8 +90,8 @@ export const gravity: ParamSpec = params.register({
     setG('GRAV', g);
     // Matter keeps its own copy of gravity; the legacy branch synced it so the
     // visible objects actually get heavier, not just the handwritten solver.
-    const MW = (globalThis as unknown as Record<string, any>).MW;
-    if (MW?.engine) MW.engine.gravity.y = g / 1000;
+    const MW = matterWorld();
+    if (MW?.engine?.gravity) MW.engine.gravity.y = g / 1000;
   },
 });
 

@@ -27,18 +27,18 @@
  * direction consistent with each other (changing one recomputes the vector).
  */
 import { params, type AnyBody, type ParamSpec } from '../core/param-registry.ts';
+import {
+  callLegacy,
+  paramLetter as legacyParamLetter,
+  timeScale as legacyTimeScale,
+  setTimeScale as legacySetTimeScale,
+} from '../core/legacy.ts';
 
 /** The letter object the panel is currently editing, if any. */
 function paramLetter(): AnyBody | null {
-  const l = (globalThis as unknown as Record<string, unknown>).paramLetter;
-  return (l as AnyBody) ?? null;
+  return legacyParamLetter() as AnyBody | null;
 }
 
-/** Call a legacy helper if present. */
-function call(name: string, ...args: unknown[]): unknown {
-  const fn = (globalThis as unknown as Record<string, unknown>)[name];
-  return typeof fn === 'function' ? (fn as (...a: unknown[]) => unknown)(...args) : undefined;
-}
 
 /** Clamp helper matching the legacy `clamp(v, lo, hi)` semantics. */
 function clamp(v: number, lo: number, hi: number): number {
@@ -80,7 +80,7 @@ function writeGrant(
   const letter = paramLetter();
   if (!letter) return;
   if (letter.state !== 'dock') letter[letterField] = value;
-  else call('charDefWrite', letter, letterField, value);
+  else callLegacy('charDefWrite', letter, letterField, value);
 }
 
 /* --------------------------------------------------------------------------
@@ -99,15 +99,12 @@ export const timeScale: ParamSpec = params.register({
   // A world-level control on the `t` glyph; unlike `grav` there is no body
   // field at all — it only ever sets the global TIME_SCALE.
   scope: letterOnlyScope(),
-  read: () => {
-    const v = (globalThis as unknown as Record<string, unknown>).TIME_SCALE;
-    return typeof v === 'number' && Number.isFinite(v) ? v : 1;
-  },
+  read: () => legacyTimeScale(),
   write: (_b, v) => {
     // Legacy clamps to [0, 20]: 0 freezes self-evolution (interaction stays
     // live), and the upper bound is a sanity guard.
     const s = clamp(v, 0, 20);
-    (globalThis as unknown as Record<string, any>).TIME_SCALE = s;
+    legacySetTimeScale(s);
   },
 });
 

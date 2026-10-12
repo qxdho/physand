@@ -23,6 +23,7 @@
  */
 
 import { params } from '../core/param-registry.ts';
+import { legacyParamDefsTable } from '../core/legacy.ts';
 
 /**
  * Give every registry parameter a `PARAM_DEFS` entry, so the panel can render it.
@@ -33,8 +34,7 @@ import { params } from '../core/param-registry.ts';
  * behaviour for parameters that have not been migrated yet.
  */
 export function bridgeParamDefs(): void {
-  const g = globalThis as unknown as Record<string, any>;
-  const defs = g.PARAM_DEFS as Record<string, any> | undefined;
+  const defs = legacyParamDefsTable();
   if (!defs) {
     throw new Error('bridgeParamDefs: PARAM_DEFS not found on globalThis');
   }

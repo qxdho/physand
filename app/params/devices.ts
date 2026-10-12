@@ -29,18 +29,7 @@
  * was "visible but not touchable"). We call the same functions.
  */
 import { params, type AnyBody, type ParamSpec } from '../core/param-registry.ts';
-
-/** Read a numeric constant the legacy app publishes on globalThis. */
-function K(name: string, fallback: number): number {
-  const v = (globalThis as unknown as Record<string, unknown>)[name];
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-/** Call a legacy top-level function if it is present. */
-function call(name: string, ...args: unknown[]): unknown {
-  const fn = (globalThis as unknown as Record<string, unknown>)[name];
-  return typeof fn === 'function' ? (fn as (...a: unknown[]) => unknown)(...args) : undefined;
-}
+import { callLegacy, constant as K } from '../core/legacy.ts';
 
 function isSpring(b: AnyBody): boolean {
   return b.kind === 'S' && !b.hinge && !b.rope;
@@ -100,7 +89,7 @@ export const springLen: ParamSpec = params.register({
     // rather than just storing a number. The legacy comment on R58 records that
     // writing the field alone left the drawing motionless and the spring
     // mis-coloured because cur != L0.
-    if (b.kind === 'S') call('springSetLen', b, v);
+    if (b.kind === 'S') callLegacy('springSetLen', b, v);
     else b.len = Math.max(1, v);
   },
 });
@@ -140,7 +129,7 @@ export const rodLen: ParamSpec = params.register({
     // setRodLen is the single choke point for rod length: it also rebuilds the
     // collision mirror plate, which is what makes the rod "touchable" at its
     // new size (legacy R98-1 measured boundsW stuck at the original width).
-    if (b.kind === 'T') call('setRodLen', b, v, true);
+    if (b.kind === 'T') callLegacy('setRodLen', b, v, true);
     else b.len = Math.max(1, v);
   },
 });
@@ -186,7 +175,7 @@ export const ropeLen: ParamSpec = params.register({
   write: (b, v) => {
     // Same choke point as the spring: a rope whose length only changed on paper
     // would be a repeat of the R101 bug.
-    if (b.rope) call('springSetLen', b, v);
+    if (b.rope) callLegacy('springSetLen', b, v);
     else b.len = Math.max(1, v);
   },
 });
@@ -238,7 +227,7 @@ export const groundLen: ParamSpec = params.register({
     const len = Math.max(K('GROUND_MIN_LEN', 60), Math.min(v, K('GROUND_MAX_LEN', 1600)));
     const u = Math.cos(b.th || 0);
     const w = Math.sin(b.th || 0);
-    call(
+    callLegacy(
       'setGroundEnds',
       b,
       b.x - (u * len) / 2,
@@ -263,7 +252,7 @@ export const groundAngle: ParamSpec = params.register({
   // Stored as radians internally, displayed in degrees (legacy returns degrees).
   read: (b) => ((b && b.th ? b.th : 0) * 180) / Math.PI,
   write: (b, v) => {
-    if (b.gnd) call('setGroundAngle', b, (v * Math.PI) / 180);
+    if (b.gnd) callLegacy('setGroundAngle', b, (v * Math.PI) / 180);
   },
 });
 
@@ -311,8 +300,8 @@ export const beltAngle: ParamSpec = params.register({
     // Normalize to (-PI, PI] exactly as the legacy branch does, then route
     // through setBeltAngle so points, hull and the mirror plate all follow.
     if (b.belt) {
-      const norm = call('shortAng', v);
-      call('setBeltAngle', b, typeof norm === 'number' ? norm : v, null);
+      const norm = callLegacy('shortAng', v);
+      callLegacy('setBeltAngle', b, typeof norm === 'number' ? norm : v, null);
     }
   },
 });
