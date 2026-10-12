@@ -18118,10 +18118,20 @@ function recSnap(full){
   /* ★R132-10u：`full=true` 只用于 `REC.init`（录制起点的完整快照）。同一体的「物理语义」字段
    *  （公式记忆 / 质量倍率 / μ / 全量墨迹顶点）在它整个生命周期里都不变，逐帧重复记会让 30 秒的
    *  JSON 体积翻好几倍；只在起点记一次，复现时拿它重建初始场景即可。 */
-  var f={t:+(recNow()-REC.t0).toFixed(1),mode:(typeof PHYS_MODE!=='undefined'?PHYS_MODE:null),
-         g:(typeof GRAV!=='undefined'?GRAV:null)};
-  if(MW&&MW.engine)f.pt=+MW.engine.timing.timestamp.toFixed(1);
-  if(typeof TOOL!=='undefined')f.tool=TOOL.mode+(TOOL.shape?('/'+TOOL.shape):'');
+  /* ★★2026-10（阶段 B：状态收口）：世界状态改走**录制门面**（`app/core/recorder-facade.ts`），
+   *  不再在本函数里逐个 `typeof X!=='undefined'` 探针。
+   *  为什么必须是访问器而不是拷贝：`PHYS_MODE`/`GRAV` 在运行时会重新赋值，拷一份会**静默过期**
+   *  （模块桥那一节记录过同一个坑）。
+   *  ⚠ 保留 `RF` 缺失时的原路回退：门面是迁移期设施，它不在时录制器必须照旧能工作
+   *  （例如别处单独 eval 这个文件时）。两条路径读的是**同一份真源**，所以取值完全一致。 */
+  var RF=(typeof globalThis!=='undefined')?globalThis.__recorderFacade:null;
+  var f={t:+(recNow()-REC.t0).toFixed(1),
+         mode:RF?RF.physMode():(typeof PHYS_MODE!=='undefined'?PHYS_MODE:null),
+         g:RF?RF.gravity():(typeof GRAV!=='undefined'?GRAV:null)};
+  var _pt=RF?RF.matterTimestamp():((MW&&MW.engine)?MW.engine.timing.timestamp:null);
+  if(_pt!=null)f.pt=+_pt.toFixed(1);
+  var _tool=RF?RF.toolDescriptor():((typeof TOOL!=='undefined')?(TOOL.mode+(TOOL.shape?('/'+TOOL.shape):'')):null);
+  if(_tool!=null)f.tool=_tool;
   f.bs=[];
   for(var i=0;i<bodies.length;i++){
     var B=bodies[i],mb=B&&B.mb;
@@ -18396,18 +18406,24 @@ function recAutoStop(){
  *  全部用 try 包住：任何一个符号缺失都只是少一个字段，**绝不能**让导出整条挂掉。 */
 function recEnv(){
   var e={ver:REC_APP_VER,ms:REC_MS,recv:2};
+  /* ★★2026-10（阶段 B：状态收口）：世界侧字段（UI_MODE / TOOL / bodies / freeL / MW /
+   *  paramBody）改走**录制门面**，不再逐个 `typeof` 探针。浏览器/时区那几个字段仍在这里读 ——
+   *  它们是标准 Web API，不属于「应用全局状态」，没有收口的必要。
+   *  ⚠ 门面缺失时逐项回退到原来的读法，**且保持「出错填 null、绝不抛」的容忍度**：
+   *  录制器绝不能让用户正在报 bug 的页面崩掉。 */
+  var RF=(typeof globalThis!=='undefined')?globalThis.__recorderFacade:null;
   try{e.ua=navigator.userAgent;}catch(x){}
   try{e.dpr=window.devicePixelRatio;}catch(x){}
   try{e.iw=window.innerWidth;e.ih=window.innerHeight;}catch(x){}
   try{e.sx=window.scrollX;e.sy=window.scrollY;}catch(x){}
-  try{e.ui=(typeof UI_MODE!=='undefined'?UI_MODE:null);}catch(x){}
-  try{e.touch=(typeof isTouchDevice==='function')?!!isTouchDevice():null;}catch(x){}
-  try{e.tool=(typeof TOOL!=='undefined')?(TOOL.mode+(TOOL.shape?('/'+TOOL.shape):'')):null;}catch(x){}
-  try{e.cont=(typeof TOOL!=='undefined')?!!TOOL.cont:null;}catch(x){}
   try{e.tz=(new Date()).getTimezoneOffset();}catch(x){}
-  try{e.nb=bodies.length;e.nfl=freeL.length;}catch(x){}
-  try{e.wb=(typeof MW!=='undefined'&&MW&&MW.engine)?MW.engine.world.bodies.length:null;}catch(x){}
-  try{e.panel=paramBody?(paramBody._nm||paramBody.kind||'?'):null;}catch(x){}
+  try{e.ui=RF?RF.uiMode():(typeof UI_MODE!=='undefined'?UI_MODE:null);}catch(x){}
+  try{e.touch=(typeof isTouchDevice==='function')?!!isTouchDevice():null;}catch(x){}
+  try{e.tool=RF?RF.toolDescriptor():((typeof TOOL!=='undefined')?(TOOL.mode+(TOOL.shape?('/'+TOOL.shape):'')):null);}catch(x){}
+  try{e.cont=RF?RF.toolContinuous():((typeof TOOL!=='undefined')?!!TOOL.cont:null);}catch(x){}
+  try{e.nb=RF?RF.bodyCount():bodies.length;e.nfl=RF?RF.freeLetterCount():freeL.length;}catch(x){}
+  try{e.wb=RF?RF.matterBodyCount():((typeof MW!=='undefined'&&MW&&MW.engine)?MW.engine.world.bodies.length:null);}catch(x){}
+  try{e.panel=RF?RF.panelTarget():(paramBody?(paramBody._nm||paramBody.kind||'?'):null);}catch(x){}
   try{e.light=(typeof bossLightState==='function')?!!bossLightState():null;}catch(x){}
   return e;
 }

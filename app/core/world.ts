@@ -1,39 +1,46 @@
 /**
- * World — the single mutable state container for the simulation.
+ * World — the intended state container for the simulation.
  *
- * WHY THIS EXISTS (phase A of the refactor)
- * -----------------------------------------
- * The legacy app hangs ~211 mutable globals off one script scope. The two worst
- * offenders are `bodies` (372 references) and `W` (409), and `grab` is worse
- * still (568). Every subsystem reaches into them directly, which is why the
- * code forms one 165-function strongly-connected component and why no clean
- * module seam exists today.
+ * ⚠️ CURRENT STATUS: PREPARED, NOT YET WIRED
+ * ------------------------------------------
+ * Built in phase A as the target for state consolidation; still UNUSED by the
+ * running app. That is worth stating plainly rather than implying progress: no
+ * call site has moved onto it yet.
  *
- * Phase A does NOT change any call site. It introduces this container and the
- * accessor functions, and proves (via the 9 replay scenarios) that routing
- * reads/writes through it is behaviour-neutral. Subsequent phases then migrate
- * subsystems onto it one at a time.
+ * An earlier revision also carried `attachLegacySource()` / `readView()`, a
+ * getter-based facade meant to let the recorder read world state through this
+ * class. It was carefully built and then never read — the recorder used
+ * `core/recorder-facade.ts` instead, because its functions close over the legacy
+ * scope and cannot be reached by an object assembled outside it. That dead
+ * facade was removed rather than left in place looking load-bearing.
  *
- * KEY OBSERVATION THAT MAKES THIS TRACTABLE
- * -----------------------------------------
- * Every body in the project is created through exactly one function (`BODY()`,
- * legacy src/10-app.js:216) and removed through `bodies.splice(...)`. There are
- * 14 splice sites but they all do the same "find by identity, remove" dance.
- * That means the collection has a genuine choke point, so an ordered container
- * with explicit add/remove can replace the bare array without hunting down
- * hundreds of call sites.
+ * WHAT IS ACTUALLY IN USE FROM THIS FILE
+ * --------------------------------------
+ * Nothing today. Consolidation so far has gone through `core/legacy.ts` — one
+ * audited access point with real types, which is where a subsystem's
+ * dependencies become visible and type-checked.
  *
- * DESIGN RULES
- * ------------
- * 1. `bodies` stays iterable and array-like (`length`, `[i]`, `for` loops) so
- *    the ~372 existing read sites keep working untouched during migration.
+ * WHY KEEP IT
+ * -----------
+ * The observation below is still the plan for `bodies`, and it is why the
+ * eventual move is tractable: every body is created through exactly one function
+ * (`BODY()`, legacy src/10-app.js:216) and removed by identity. When `bodies`
+ * is migrated, this is where it lands, and `BodyList` already models the
+ * identity-based removal the 14 splice sites perform by hand.
+ *
+ * If that migration wants a different shape, delete this file rather than keep
+ * it "just in case". Its value is the analysis, not the code.
+ *
+ * DESIGN RULES (for when it is wired)
+ * -----------------------------------
+ * 1. `bodies` stays iterable and array-like (`length`, `[i]`, `for` loops) so the
+ *    ~372 existing read sites keep working untouched during migration.
  * 2. Removal is by identity, never by index — index-based splices are the
  *    classic source of "wrong object deleted" bugs when the array is mutated
  *    during iteration (the legacy code already guards this by re-checking
- *    `indexOf`, see legacy line 283).
- * 3. No behaviour is added here. This is deliberately a dumb container in
- *    phase A; invariants (e.g. "mb is disposed on removal") come later, once
- *    the replay net proves they hold.
+ *    `indexOf`).
+ * 3. No behaviour beyond bookkeeping: invariants (e.g. "mb is disposed on
+ *    removal") only get added once the replay net proves they hold.
  */
 
 /** A body as the legacy code models it. Intentionally loose during migration. */
@@ -126,48 +133,6 @@ export class BodyList implements Iterable<Body> {
  * legacy implementation during the migration.
  */
 
-/** Read-only view of the app state the recorder needs. */
-export interface WorldReadView {
-  /** Live body collection. */
-  readonly bodies: BodyList;
-  /** Free (unmerged) letters. */
-  readonly freeLetters: readonly unknown[];
-  /** Canvas width/height in CSS pixels. */
-  readonly canvasWidth: number;
-  readonly canvasHeight: number;
-  /** Matter engine handle, or null before boot. */
-  readonly matter: unknown;
-  /** Simulation constants, read at snapshot time. */
-  readonly gravity: number;
-  readonly pixelsPerMetre: number;
-  readonly groundY: number;
-  readonly physMode: string | null;
-  /** Current tool mode, e.g. "pen" or "pen/circle". */
-  readonly toolMode: string | null;
-  readonly uiMode: string | null;
-}
-
-/**
- * Bridge to the legacy globals during the migration.
- *
- * The legacy app is still the implementation; this only gives typed, named
- * access to it. When a subsystem is fully migrated, its entry here is deleted
- * and replaced by a real field on World — that is the signal a seam is closed.
- */
-interface LegacySource {
-  bodies: BodyList | null;
-  freeLetters: readonly unknown[] | null;
-  canvasWidth?: number;
-  canvasHeight?: number;
-  matter: unknown;
-  gravity: number;
-  pixelsPerMetre: number;
-  groundY: number;
-  physMode: string | null;
-  toolMode: string | null;
-  uiMode: string | null;
-}
-
 export class World {
   readonly bodies = new BodyList();
 
@@ -176,70 +141,24 @@ export class World {
   canvasHeight = 0;
   matter: unknown = null;
 
-  /**
-   * Populated by `attachLegacySource` while the legacy globals are still the
-   * real implementation. Removed in phase C.
-   */
-  private legacy: LegacySource | null = null;
-
-  /**
-   * Point the read facade at the legacy globals.
+  /*
+   * NOTE ON A REMOVED DESIGN (kept so it is not reintroduced)
+   * --------------------------------------------------------
+   * An earlier revision exposed `attachLegacySource()` + `readView()` here: a
+   * getter-based snapshot of the globals for the recorder to consume. It was
+   * carefully built (live getters, null-tolerant) — and then never read by
+   * anything. The recorder kept reading globals directly while the facade sat
+   * unused, which LOOKS like migration progress and is not.
    *
-   * Called once from the bridge right after the legacy app is evaluated. Using
-   * a getter-based object (rather than copying values) matters: `GRAV` and
-   * `bodies` are reassigned/ mutated at runtime, so a snapshot copy would go
-   * stale and the recorder would silently capture wrong values.
-   */
-  attachLegacySource(src: LegacySource): void {
-    this.legacy = src;
-  }
-
-  /**
-   * The recorder's read view.
+   * The recorder now uses `app/core/recorder-facade.ts` instead, because its
+   * functions close over the legacy scope and cannot be reached by an object
+   * assembled outside it. Both designs were valid; keeping two would have been
+   * worse than keeping the one that works.
    *
-   * Every field is guarded: the recorder runs in environments where some
-   * globals may not exist yet (and `recEnv` is explicitly written to tolerate
-   * that — it wraps each field in try/catch and emits null). We preserve that
-   * tolerance rather than throwing, because a recording must never be able to
-   * crash the app the user is trying to report a bug in.
+   * If a future subsystem genuinely needs a typed view of world state, add it to
+   * `core/legacy.ts` (the single audited access point) rather than rebuilding
+   * a second facade here.
    */
-  readView(): WorldReadView {
-    const L = this.legacy;
-    const bodies = L?.bodies ?? this.bodies;
-    return {
-      bodies,
-      get freeLetters() {
-        return L?.freeLetters ?? [];
-      },
-      get canvasWidth() {
-        return L ? (L.canvasWidth ?? 0) : 0;
-      },
-      get canvasHeight() {
-        return L ? (L.canvasHeight ?? 0) : 0;
-      },
-      get matter() {
-        return L?.matter ?? null;
-      },
-      get gravity() {
-        return L?.gravity ?? 0;
-      },
-      get pixelsPerMetre() {
-        return L?.pixelsPerMetre ?? 0;
-      },
-      get groundY() {
-        return L?.groundY ?? 0;
-      },
-      get physMode() {
-        return L?.physMode ?? null;
-      },
-      get toolMode() {
-        return L?.toolMode ?? null;
-      },
-      get uiMode() {
-        return L?.uiMode ?? null;
-      },
-    } as WorldReadView;
-  }
 
   /** Create a body and register it — the single add path (legacy `BODY()`). */
   createBody(init: Partial<Body> & { x: number; y: number }): Body {

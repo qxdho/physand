@@ -163,6 +163,59 @@ test('the legacy single-file sources are not modified during the migration', () 
   );
 });
 
+test('every installed bridge object is actually consumed somewhere', () => {
+  /* WHY THIS EXISTS
+   * `World.readView()` was built in phase B round 1 and found UNUSED later: the
+   * recorder read globals directly, and the facade's key was assigned in
+   * main.ts but never read by anything. It LOOKED like migration progress while
+   * changing nothing.
+   *
+   * The lesson is that "the abstraction exists" is not progress; "a call site
+   * moved" is. So this guard requires each bridge key to be READ somewhere other
+   * than its own installation site.
+   *
+   * WHERE CONSUMPTION LIVES DEPENDS ON THE DESIGN:
+   *   - `__recorderFacade` is read from src/10-app.js (the recorder consults it).
+   *   - `__paramHooks` is read from an EPILOGUE STRING in app/core/, because the
+   *     panel functions must be wrapped from INSIDE the legacy scope; patching
+   *     globals provably cannot reach them (verified in an earlier round).
+   *
+   * Hence: raw source (not comment/string-stripped), because the epilogue IS a
+   * string literal and stripping would erase the evidence.
+   */
+  const legacy = readFileSync(join(APP, '..', 'src', '10-app.js'), 'utf8');
+  const appText = appSources()
+    .map((s) => s.text)
+    .join('\n');
+
+  /** True when `key` is READ somewhere, ignoring its own installation line. */
+  function isConsumed(key: string): boolean {
+    if (legacy.includes(key)) return true;
+    // In app code, count only lines that reference the key WITHOUT assigning to
+    // it — an assignment is installation, not consumption.
+    return appText.split('\n').some((line) => {
+      if (!line.includes(key)) return false;
+      const assigningToIt = new RegExp(`globalThis[^;]*=\\s*\\{[^}]*$`).test(line) ||
+        new RegExp(`${key}\\s*=`).test(line);
+      return !assigningToIt;
+    });
+  }
+
+  const bridges = [
+    { name: '__paramHooks (parameter registry)', key: '__paramHooks' },
+    { name: '__recorderFacade (recorder)', key: '__recorderFacade' },
+  ];
+
+  const unused = bridges.filter((b) => !isConsumed(b.key)).map((b) => b.name);
+
+  assert.deepEqual(
+    unused,
+    [],
+    `these bridge objects are installed but never read, so they change ` +
+      `nothing: ${unused.join(', ')}`,
+  );
+});
+
 test('generated files declare themselves as generated', () => {
   // Someone editing a generated file by hand would have their change silently
   // overwritten by the next `npm run gen`. The header is the warning.

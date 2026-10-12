@@ -28,10 +28,14 @@ import appSource from '../src/10-app.js?raw';
 import bossSource from '../src/90-boss.js?raw';
 import { LEGACY_GLOBAL_NAMES } from './core/legacy-globals.generated';
 import { evaluateAsClassicScript, assertGlobalsPresent } from './core/module-bridge';
-import { world } from './core/world';
 import { params } from './core/param-registry';
 import { bridgeParamDefs } from './core/panel-bridge';
 import { PANEL_HOOK_EPILOGUE, PARAM_HOOKS_KEY } from './core/panel-hooks';
+import {
+  RECORDER_FACADE_EPILOGUE,
+  RECORDER_FACADE_KEY,
+  type RecorderFacade,
+} from './core/recorder-facade';
 
 // Side-effect imports: these modules perform the `params.register(...)` calls.
 // Without them the registry is EMPTY at boot, the hook claims no ids, and the
@@ -51,57 +55,6 @@ function installStaticDom(): void {
   const root = document.getElementById('app-root');
   if (!root) throw new Error('physand: #app-root missing from index.html');
   root.innerHTML = bodyHtml + midHtml;
-}
-
-/**
- * Point the World read facade at the legacy globals.
- *
- * MUST be called after the app is evaluated (it reads live globals) but the
- * properties are getters, so it must NOT be called before — `bodies` etc. are
- * created during app evaluation and reassigned at runtime.
- *
- * Each accessor is defensive by design: the recorder calls these from
- * `recEnv()`, which is explicitly written to tolerate missing state and emit
- * null rather than throw. A recording must never be able to crash the app the
- * user is trying to report a bug in, so we keep that tolerance here.
- */
-function attachWorldReadFacade(): void {
-  const g = globalThis as unknown as Record<string, any>;
-  world.attachLegacySource({
-    get bodies() {
-      return g.bodies ?? null;
-    },
-    get freeLetters() {
-      return g.freeL ?? null;
-    },
-    get canvasWidth() {
-      return g.W ?? 0;
-    },
-    get canvasHeight() {
-      return g.H ?? 0;
-    },
-    get matter() {
-      return g.MW ?? null;
-    },
-    get gravity() {
-      return g.GRAV ?? 0;
-    },
-    get pixelsPerMetre() {
-      return g.PX_PER_M ?? 0;
-    },
-    get groundY() {
-      return g.groundY ?? 0;
-    },
-    get physMode() {
-      return g.PHYS_MODE ?? null;
-    },
-    get toolMode() {
-      return g.TOOL ? g.TOOL.mode + (g.TOOL.shape ? '/' + g.TOOL.shape : '') : null;
-    },
-    get uiMode() {
-      return g.UI_MODE ?? null;
-    },
-  } as never);
 }
 
 /**
@@ -136,6 +89,31 @@ function installParamHooks(): void {
   (globalThis as unknown as Record<string, unknown>)[PARAM_HOOKS_KEY] = hook;
 }
 
+/**
+ * Install the recorder facade object that the in-scope epilogue populates.
+ *
+ * The epilogue replaces each method with a closure over the live legacy binding,
+ * so the recorder reads current values rather than a snapshot. Must run before
+ * the legacy source is evaluated.
+ */
+function installRecorderFacade(): void {
+  (globalThis as unknown as Record<string, unknown>)[RECORDER_FACADE_KEY] = {
+    // Placeholders; the epilogue overwrites every one of them. They exist so a
+    // failure to run the epilogue degrades to safe values instead of throwing
+    // inside the recorder.
+    physMode: () => null,
+    gravity: () => null,
+    toolDescriptor: () => null,
+    toolContinuous: () => null,
+    bodyCount: () => 0,
+    freeLetterCount: () => 0,
+    matterBodyCount: () => null,
+    matterTimestamp: () => null,
+    panelTarget: () => null,
+    uiMode: () => null,
+  } satisfies RecorderFacade;
+}
+
 function boot(): void {
   installStaticDom();
 
@@ -152,11 +130,16 @@ function boot(): void {
 
   // Stage 3: the application.
   //
-  // The registry hook must be installed BEFORE this runs, because the epilogue
-  // executes inside the same scope and reads it. See app/core/panel-hooks.ts for
-  // why the hook cannot be applied afterwards by patching globals.
+  // Both hook objects must be installed BEFORE this runs, because the epilogues
+  // execute inside the same scope and read them. See app/core/panel-hooks.ts for
+  // why hooks cannot be applied afterwards by patching globals.
   installParamHooks();
-  evaluateAsClassicScript(appSource, LEGACY_GLOBAL_NAMES, PANEL_HOOK_EPILOGUE);
+  installRecorderFacade();
+  evaluateAsClassicScript(
+    appSource,
+    LEGACY_GLOBAL_NAMES,
+    PANEL_HOOK_EPILOGUE + RECORDER_FACADE_EPILOGUE,
+  );
 
   // Stage 4: the boss animation IIFE, which calls back into the app globals.
   evaluateAsClassicScript(bossSource, []);
@@ -165,14 +148,12 @@ function boot(): void {
   assertGlobalsPresent();
 
   // Stage 5: wire the typed read facade onto the now-live globals.
-  attachWorldReadFacade();
 
   // Stage 6: give the legacy PARAM_DEFS table any registry-only parameters, so
   // a new knob still renders a labelled row in the panel.
   bridgeParamDefs();
 
   // Expose for the replay harness and for phase-B verification.
-  (globalThis as unknown as Record<string, unknown>).__world = world;
   (globalThis as unknown as Record<string, unknown>).__params = params;
 }
 

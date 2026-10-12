@@ -212,3 +212,62 @@ test('freeLetters and paramLetter read the live letter state', () => {
     assert.equal(paramLetter(), letters[0]);
   });
 });
+
+/* --------------------------------------------------------------------------
+ * Recorder facade
+ *
+ * The facade's methods are REPLACED by an epilogue that runs inside the legacy
+ * scope. These tests pin the two properties that make it safe: absent state
+ * degrades instead of throwing, and the placeholders are callable before the
+ * epilogue runs.
+ * ------------------------------------------------------------------------ */
+
+test('recorder facade placeholders are safe to call before the epilogue runs', async () => {
+  const { RECORDER_FACADE_KEY } = await import('./recorder-facade.ts');
+  const g = globalThis as Record<string, unknown>;
+  const saved = g[RECORDER_FACADE_KEY];
+  try {
+    // Simulate main.ts installing placeholders but the epilogue not yet having
+    // replaced them: every call must return a neutral value, never throw.
+    g[RECORDER_FACADE_KEY] = {
+      physMode: () => null,
+      gravity: () => null,
+      toolDescriptor: () => null,
+      toolContinuous: () => null,
+      bodyCount: () => 0,
+      freeLetterCount: () => 0,
+      matterBodyCount: () => null,
+      matterTimestamp: () => null,
+      panelTarget: () => null,
+      uiMode: () => null,
+    };
+    const F = g[RECORDER_FACADE_KEY] as Record<string, () => unknown>;
+    assert.equal(F.physMode!(), null);
+    assert.equal(F.gravity!(), null);
+    assert.equal(F.bodyCount!(), 0);
+    assert.equal(F.matterTimestamp!(), null);
+  } finally {
+    if (saved === undefined) delete g[RECORDER_FACADE_KEY];
+    else g[RECORDER_FACADE_KEY] = saved;
+  }
+});
+
+test('the recorder reads world state through the facade, not raw globals', async () => {
+  /* The facade is only worth having if the recorder actually consults it.
+   * `World.readView()` was built once and never read — it looked like progress
+   * and changed nothing. This asserts the link is real.
+   */
+  const { readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const legacy = readFileSync(join(root, 'src', '10-app.js'), 'utf8');
+
+  assert.match(legacy, /__recorderFacade/, 'recSnap/recEnv must consult the facade');
+
+  // And the facade must be consulted in BOTH places that read world state.
+  const snap = legacy.slice(legacy.indexOf('function recSnap(full){'));
+  const env = legacy.slice(legacy.indexOf('function recEnv(){'));
+  assert.match(snap.slice(0, 2000), /__recorderFacade/, 'recSnap must use the facade');
+  assert.match(env.slice(0, 2000), /__recorderFacade/, 'recEnv must use the facade');
+});
