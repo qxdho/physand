@@ -38,6 +38,8 @@ import { PANEL_HOOK_EPILOGUE, PARAM_HOOKS_KEY } from './core/panel-hooks';
 // panel silently keeps its legacy behaviour — with no error anywhere.
 import './params/w-body';
 import './params/devices';
+import './params/formula';
+import './params/grants';
 
 /**
  * Inject the static markup. The legacy page was a flat list of <div>s directly
