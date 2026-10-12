@@ -322,6 +322,37 @@ test('body liveness is asked through the named query, not a bare indexOf', () =>
   );
 });
 
+test('body iteration bounds come from the collection, not a raw length', () => {
+  /* WHY THIS EXISTS
+   * 83 legacy loops shared one exact shape — \`for(var i=0;i<bodies.length;i++)\` —
+   * and each restated the bound independently. They now read it from the
+   * collection module, so a change of storage touches one place.
+   *
+   * The guard exists because reintroducing the raw form is invisible: it works,
+   * and the only symptom would appear later, when the collection's storage
+   * changes and this loop silently keeps consulting a global.
+   *
+   * Only FOR-loop bounds are flagged. A one-off \`bodies.length\` read (a count
+   * used in arithmetic, or a backwards initialization) is a different thing and
+   * is deliberately not covered.
+   */
+  const legacy = readFileSync(join(APP, '..', 'src', '10-app.js'), 'utf8');
+  const offenders: string[] = [];
+  legacy.split('\n').forEach((line, i) => {
+    if (/^\s*\*|^\s*\/\*/.test(line)) return;
+    if (/for\s*\([^)]*<\s*bodies\.length/.test(line)) {
+      offenders.push(`L${i + 1}: ${line.trim()}`);
+    }
+  });
+  assert.deepEqual(
+    offenders,
+    [],
+    'these loops bound themselves on the raw bodies.length instead of ' +
+      '_bodyCount():\n' +
+      offenders.join('\n'),
+  );
+});
+
 test('generated files declare themselves as generated', () => {
   // Someone editing a generated file by hand would have their change silently
   // overwritten by the next `npm run gen`. The header is the warning.

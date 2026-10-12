@@ -162,6 +162,8 @@ function readBridge(): {
   isAlive(b: unknown): boolean;
   remove(b: unknown): boolean;
   removeAt(i: number): void;
+  count(): number;
+  forEachBody(visit: (b: LegacyBody, i: number) => void): void;
 } {
   return (globalThis as Record<string, unknown>)[BODY_LIST_KEY] as never;
 }
@@ -281,6 +283,100 @@ test('isAlive is false when the array does not exist yet', () => {
     const b = g[BODY_LIST_KEY] as { isAlive(x: unknown): boolean };
     assert.equal(b.isAlive({ x: 0, y: 0 }), false);
     assert.equal(b.isAlive(null), false);
+  } finally {
+    if (saved === undefined) delete g[BODY_LIST_KEY];
+    else g[BODY_LIST_KEY] = saved;
+  }
+});
+
+/* --------------------------------------------------------------------------
+ * count() and forEachBody() — the loop-bound surface
+ * ------------------------------------------------------------------------ */
+
+test('count matches the live array length', () => {
+  // 83 legacy loops use `bodies.length` as their bound; each restates it.
+  const { arr, bridge: b } = bridge([]);
+  assert.equal(b.count(), 0);
+  arr.push(body(1), body(2));
+  assert.equal(b.count(), 2);
+  arr.pop();
+  assert.equal(b.count(), 1, 'count follows the array, it is not a snapshot');
+});
+
+test('count is zero when there is no array yet', () => {
+  const g = globalThis as Record<string, unknown>;
+  const saved = g[BODY_LIST_KEY];
+  installBodyListBridge(() => undefined);
+  try {
+    const b = g[BODY_LIST_KEY] as { count(): number };
+    assert.equal(b.count(), 0);
+  } finally {
+    if (saved === undefined) delete g[BODY_LIST_KEY];
+    else g[BODY_LIST_KEY] = saved;
+  }
+});
+
+test('count is re-read every iteration, matching `i < bodies.length`', () => {
+  /* This is the semantic that must not change. A loop written as
+   *   for (i = 0; i < bodies.length; i++)
+   * re-evaluates the bound each step, so removing during the walk shortens it.
+   * Caching the length first would silently iterate over a slot that no longer
+   * exists — and that difference is invisible until something is deleted
+   * mid-loop, which several teardown paths do.
+   */
+  const items = [body(1), body(2), body(3)];
+  const g = globalThis as Record<string, unknown>;
+  const saved = g[BODY_LIST_KEY];
+  installBodyListBridge(() => items);
+  try {
+    const b = g[BODY_LIST_KEY] as { count(): number };
+    let iterations = 0;
+    for (let i = 0; i < b.count(); i++) {
+      iterations++;
+      if (i === 1) items.splice(2, 1); // drop the third while walking
+    }
+    /* The walk stops early: i=0 and i=1 run (length 3), the third item is
+     * dropped during i=1, so at i=2 the bound is 2 and 2 < 2 is false.
+     * Caching the length first would have produced 3 iterations instead. */
+    assert.equal(iterations, 2, 'the walk saw the shortened list and stopped early');
+
+    // And with the bound cached (the WRONG way) it would be 3 as well here but
+    // for a different reason — so assert the count really is re-read.
+    let reads = 0;
+    const counted = { count: () => (reads++, items.length) };
+    for (let i = 0; i < counted.count(); i++) { /* walk */ }
+    assert.ok(reads >= items.length, `bound evaluated ${reads} times for ${items.length} items`);
+  } finally {
+    if (saved === undefined) delete g[BODY_LIST_KEY];
+    else g[BODY_LIST_KEY] = saved;
+  }
+});
+
+test('forEachBody visits every body in order, with its index', () => {
+  const { arr, bridge: b } = bridge([]);
+  const bs = [body(1), body(2), body(3)];
+  arr.push(...bs);
+
+  const seen: { x: number; i: number }[] = [];
+  b.forEachBody((x, i) => seen.push({ x: x.x, i }));
+  assert.deepEqual(seen, [
+    { x: 1, i: 0 },
+    { x: 2, i: 1 },
+    { x: 3, i: 2 },
+  ]);
+});
+
+test('forEachBody tolerates a missing array', () => {
+  const g = globalThis as Record<string, unknown>;
+  const saved = g[BODY_LIST_KEY];
+  installBodyListBridge(() => undefined);
+  try {
+    const b = g[BODY_LIST_KEY] as { forEachBody(f: (x: unknown, i: number) => void): void };
+    let ran = false;
+    b.forEachBody(() => {
+      ran = true;
+    });
+    assert.equal(ran, false, 'visits nothing, does not throw');
   } finally {
     if (saved === undefined) delete g[BODY_LIST_KEY];
     else g[BODY_LIST_KEY] = saved;

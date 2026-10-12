@@ -255,6 +255,42 @@ export interface BodyListBridge {
    * exercises through the anchor-release scenarios.
    */
   isAlive(body: unknown): boolean;
+
+  /**
+   * Visit every body in collection order.
+   *
+   * WHY THIS EARNS ITS PLACE
+   * ----------------------
+   * A structural survey found 78 loops in the legacy file that share ONE exact
+   * shape:
+   *
+   *   for (var i = 0; i < bodies.length; i++) { var B = bodies[i]; ... }
+   *
+   * Only the variable name varies. The 78 sites are not doing 78 different
+   * things — they are all "walk the bodies and look at each one" — yet each
+   * re-states the bounds check that must agree with however the collection is
+   * stored.
+   *
+   * This is the safe way to narrow those reads. Iteration is a READ-ONLY
+   * operation, so converting a site cannot change what the loop does; the only
+   * thing that changes is where the bound comes from. That matters because the
+   * alternative — rewriting 78 loop bodies — is exactly the kind of bulk edit
+   * that has broken physics in this project before.
+   *
+   * The visitor may NOT mutate the collection: removing during iteration is the
+   * documented hazard, and the six backwards loops that do remove keep their
+   * explicit index form.
+   */
+  forEachBody(visit: (body: LegacyBody, index: number) => void): void;
+
+  /**
+   * How many bodies there are.
+   *
+   * The counterpart to `forEachBody`: 83 legacy loops use `bodies.length` as
+   * their bound, and each restates it independently. Going through the
+   * collection means a change of storage touches one place.
+   */
+  count(): number;
 }
 
 export const BODY_LIST_KEY = '__bodyList';
@@ -279,6 +315,16 @@ export function installBodyListBridge(readArray: () => LegacyBody[] | undefined)
     isAlive(body) {
       const arr = readArray();
       return !!arr && arr.indexOf(body as LegacyBody) >= 0;
+    },
+    count() {
+      return readArray()?.length ?? 0;
+    },
+    forEachBody(visit) {
+      const arr = readArray();
+      if (!arr) return;
+      // Index-based, matching the loops being replaced, and re-reading length
+      // each step so the semantics are identical to `i < bodies.length`.
+      for (let i = 0; i < arr.length; i++) visit(arr[i] as LegacyBody, i);
     },
     remove(body) {
       const arr = readArray();
