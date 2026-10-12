@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # These three checks guard against silent drift between the several
+      # representations of the same source that exist during the migration:
+      #
+      #   build.mjs          src/          -> index.html   (legacy single-file)
+      #   extract-legacy.mjs src/00-head   -> app/legacy/  (Vite CSS + markup)
+      #   gen-globals.mjs    src/10-app.js -> legacy-globals.generated.ts
+      #
+      # If any of them is stale, the two builds disagree about what the app IS,
+      # and the replay baselines stop meaning anything.
+      - name: Check generated files are fresh
+        run: npm run gen:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build (Vite app)
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # The legacy single-file build must keep working until the migration
+      # finishes; its baselines are the reference the new build is judged against.
+      - name: Replay regression - legacy single-file build
+        run: npm test
+
+      - name: Serve Vite build
+        run: npx vite preview --port 4173 --host 127.0.0.1 &
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:4173/; then
+              echo "server up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "server did not start"; exit 1
+
+      # Same 9 scenarios, same baselines, run against the NEW architecture.
+      # This is what proves the migration is behaviour-identical rather than
+      # merely "the new build loads".
+      - name: Replay regression - Vite app
+        run: npm run test:app
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: ignore

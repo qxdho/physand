@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>physand</title>
+    <!--
+      Phase A shell.
+
+      The legacy single-file artifact kept <style> and the static DOM inline in
+      src/00-head.html and src/05-body.html. For the Vite build we load them as
+      real assets instead, which is what makes hot-reload and CSS tooling work.
+
+      `./legacy/head.html` and `./legacy/body.html` are generated from the
+      existing fragments by tools/extract-legacy.mjs so there is exactly ONE
+      source of truth during the migration — no copy that can drift.
+    -->
+  </head>
+  <body>
+    <div id="app-root"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

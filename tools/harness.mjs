@@ -36,6 +36,26 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const INDEX = join(ROOT, 'index.html');
 
+/**
+ * Where to load the app from.
+ *
+ * During the migration two targets must both stay testable:
+ *   - `legacy` (default): the single-file build at index.html, over file://
+ *   - `app`: the Vite dev/preview server, via PHYSAND_TEST_URL
+ *
+ * Keeping both runnable is what lets us prove the new architecture is
+ * behaviour-identical to the old one: the same 9 scenarios and the same
+ * baselines run against each target.
+ */
+const TARGET = process.env.PHYSAND_TARGET || 'legacy';
+const APP_URL = process.env.PHYSAND_TEST_URL || 'http://127.0.0.1:4173/';
+
+function targetUrl() {
+  if (TARGET === 'app') return APP_URL;
+  if (TARGET === 'legacy') return 'file://' + INDEX;
+  throw new Error(`harness: unknown PHYSAND_TARGET "${TARGET}" (expected "legacy" or "app")`);
+}
+
 /** Libraries Chromium needs, extracted without root by tools/fetch-syslibs.sh */
 const LIB_DIRS = [
   join(ROOT, '.syslibs/root/usr/lib/x86_64-linux-gnu'),
@@ -148,7 +168,7 @@ export class Harness {
     });
     // must be registered before goto so it applies to the page's own scripts
     await this.page.addInitScript(PREINIT_FREEZE);
-    await this.page.goto('file://' + INDEX);
+    await this.page.goto(targetUrl());
     // ★2026-10: `this.timeout` used to be dead — set in the constructor and never
     // applied anywhere, so a page that never finished booting would hang the whole
     // run forever with no message. Apply it to the boot wait and to the per-scenario
