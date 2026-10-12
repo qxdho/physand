@@ -1501,7 +1501,7 @@ function rebuildRodMirror(B){
          collisionFilter:{group:ROD_HOST_CGROUP}});
   B.mb._rodRef=B;
   Matter.Body.setAngle(B.mb,tht);
-  Matter.Composite.add(MW.wLayer,B.mb);
+  _matterAttach(B.mb);
   B._mlen=B.len||170;
   B._manc=((B.anc[0]?1:0)|(B.anc[1]?2:0));
 }
@@ -4117,7 +4117,7 @@ function springMirror(B){
      `_verify_r66.py` 6c 实测判红）。标记只在本函数这一处创建点写，重建时自然重打。 */
   B.mb._kinShell=true;
   B._mlen=B.cur;
-  Matter.Composite.add(MW.wLayer,B.mb);
+  _matterAttach(B.mb);
   springEndCaps(B);
 }
 /* ★★R131-14（用户 2026-09-26：「当弹簧某段没有固定物体时，默认端口是一个横的边界，并且
@@ -14084,11 +14084,32 @@ function ensureMatter(){
      挂到事件上之后，「凡是 Matter 推进一步」就一定有一次自算摩擦。 */
   Matter.Events.on(E,'afterUpdate',function(){ try{wfSelfFriction(ROD_SUB_DT);}catch(e){} });
 }
+/* ★★2026-10（阶段 B / 「隔离 Matter」目标）：**Matter 挂载层的唯一入口**。
+ *  为什么值得收口：镜像体可以挂在**两个不同** composite 上 ——
+ *    · `MW.wLayer`      画出来的 W 体、杆的镜像板、弹簧端帽（是加进 engine.world 的**子** composite）
+ *    · `MW.engine.world` 根世界（静态边框 ground/wl/wr/wt 在这里）
+ *  挂错**不会报错**：体加进去了、不抛异常，只是**永不参与碰撞**（或在不该碰的时候碰）。
+ *  原代码在 11 处各自写 Composite.add/remove，还有几处包在 try/catch 里，
+ *  于是一个挂错层的错误会退化成静默失效而不是失败。
+ *  ⇒ 收成两个具名动作，调用点不再提 composite 的名字。
+ *  ⚠ 门面缺失时回退到原写法，保证单独 eval 本文件时也能工作。 */
+function _matterAttach(mb){
+  var F=(typeof globalThis!=='undefined')?globalThis.__matterBridge:null;
+  if(F){return F.attachToWall(mb);}
+  if(mb&&MW){Matter.Composite.add(MW.wLayer,mb);return true;}
+  return false;
+}
+function _matterDetach(mb){
+  var F=(typeof globalThis!=='undefined')?globalThis.__matterBridge:null;
+  if(F){return F.detachFromWall(mb);}
+  if(mb&&MW){Matter.Composite.remove(MW.wLayer,mb);return true;}
+  return false;
+}
 function removeMatterBody(B){
-  if(B.mb&&MW){Matter.Composite.remove(MW.wLayer,B.mb);}
+  _matterDetach(B.mb);
   B.mb=null;
   /* ★R131-14：弹簧的端帽体随宿主一起清（否则删弹簧后留下隐形碰撞体） */
-  if(B._cap){for(var ci=0;ci<2;ci++){if(B._cap[ci]&&MW){Matter.Composite.remove(MW.wLayer,B._cap[ci]);}}
+  if(B._cap){for(var ci=0;ci<2;ci++){if(B._cap[ci]){_matterDetach(B._cap[ci]);}}
     B._cap=null;}
 }
 function rebuildWBody(B,thOpt){
@@ -14772,7 +14793,7 @@ function buildMatterBody(B){
   B.vx=0;B.vy=0;B.om=0;
   B.fixed=false;                  // 右键"固定"：停在原地，鼠标仍可拖动，再点取消
   mb.sleepThreshold=240;           // compound bodies do NOT inherit part options — set it here
-  Matter.Composite.add(MW.wLayer,mb);
+  _matterAttach(mb);
   B.mb=mb;
   B._natMass=mb.mass;              // R64：自然质量（按几何算），wmass 乘数以它为基准
   applyWMul(B);                    // R64：重建/复制后恢复用户调过的质量乘数与摩擦

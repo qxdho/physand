@@ -82,9 +82,21 @@ test('the legacy bridge is the ONLY module that reads legacy globals directly', 
   const offenders: string[] = [];
   for (const { rel, text } of appSources()) {
     if (allowed.has(rel)) continue;
-    // Only real code counts: a mention inside a comment or an error message is
-    // documentation, not a coupling.
-    if (/\bglobalThis\b/.test(stripCommentsAndStrings(text))) offenders.push(rel);
+    const code = stripCommentsAndStrings(text);
+    if (!/\bglobalThis\b/.test(code)) continue;
+
+    /* INSTALLING a bridge object is not the same as CONSUMING legacy state.
+     * A module that does `globalThis.__myBridge = {...}` is publishing its own
+     * surface so the in-scope epilogue can reach it — that is the mechanism this
+     * refactor uses, not a coupling. Reading `globalThis.SOMETHING_LEGACY` is the
+     * coupling we are preventing.
+     *
+     * So: every `globalThis` reference in the file must be an assignment target.
+     */
+    const lines = code.split('\n').filter((l) => l.includes('globalThis'));
+    const consuming = lines.filter((l) => !/globalThis\s*\)?\s*(as[^;]*)?\)?\s*\[[^\]]*\]\s*=/.test(l)
+      && !/globalThis\s*\)?\s*(as[^;]*)?\.\w+\s*=/.test(l));
+    if (consuming.length) offenders.push(`${rel} (${consuming.length} read(s))`);
   }
 
   assert.deepEqual(

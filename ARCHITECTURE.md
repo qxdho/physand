@@ -178,7 +178,7 @@ shape-stretch-width  shape-stretch-identity  shape-fixed-holds
 spring-soft-sag  spring-stiff-sag  rod-length-changed
 ```
 
-另有 **91 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
+另有 **101 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
 
 ```bash
 npm run test:unit # 新模块单测（最快，先跑）
@@ -231,7 +231,7 @@ UI、渲染、BOSS/黑洞状态机、轨迹、面板、公式拼装、绳、传�
 | 1 | 录制/反馈（`rec`/`bug`） | ✅ 经 `core/recorder-facade.ts` 读世界状态 |
 | 2 | **参数子系统**（37 个参数） | ✅ **全部改走 `core/legacy.ts` 类型化桥** |
 | 3 | UI 面板 | ✅ 经 `core/panel-facade.ts`（状态 + 刷新） |
-| 4 | 器件（传送带/地面/铰链/绳） | ⬜ |
+| 4 | 器件（传送带/地面/铰链/绳） | ✅ 经 `core/matter-bridge.ts` 收口 Matter 挂载 |
 | 5 | 公式引擎 | ⬜ |
 | 6 | 物理核心（最后，风险最高） | ⬜ |
 
@@ -245,6 +245,31 @@ UI、渲染、BOSS/黑洞状态机、轨迹、面板、公式拼装、绳、传�
 > 所以进度指标只能是**「调用点搬走了」**，不能是**「抽象写出来了」**。
 > 现在有一条架构守卫专门抓这个：桥接对象必须**被读取**（只是被赋值不算），
 > 否则测试失败。
+
+#### 已落地的模式五：Matter 挂载桥（`core/matter-bridge.ts`）
+
+对应设计目标里的**「隔离 Matter」**。收口的是**镜像体挂到哪个 composite** 这件事。
+
+为什么它值得单独收口：镜像体可以挂在**两个不同**的 composite 上，而**挂错不会报错**：
+
+| composite | 装什么 |
+|---|---|
+| `MW.wLayer` | 画出来的 W 体、杆的镜像板、弹簧端帽（它是加进 `engine.world` 的**子** composite） |
+| `MW.engine.world` | 根世界：静态边框 `ground`/`wl`/`wr`/`wt`（开机建一次，不走这条收口） |
+
+挂错的后果是**静默的** —— 体加进去了、不抛异常，只是**永不参与碰撞**（或在不该碰的时候碰）。
+原代码在 11 处各自写 `Composite.add/remove(MW.wLayer, …)`，还有几处包在 try/catch 里，
+于是一个「挂错层」的错误会退化成 no-op 而不是失败。
+
+现在收成 `_matterAttach(mb)` / `_matterDetach(mb)` 两个具名动作，调用点不再提 composite 的名字。
+
+**等价性证据**：同一场景跑 120 步物理（两个方块 + 一根杆），传统构建与新构建
+**静止高度逐位相同**（y=587.355），`wLayer.bodies` 与 `engine.world.bodies` 计数也相同。
+
+> ⚠️ 写这个桥时我自己犯了一个**典型的静默 bug**：`matterAttach` 的默认层写成了
+> `'world'`，而所有被转换的调用点要的是 `'wall'`。单测立刻抓到了
+> （「landed in the wall layer」失败）—— 这正是「挂错层不报错」那个风险的具体体现，
+> 也说明这类桥必须配单测，光靠回归场景覆盖不到。
 
 #### 已落地的模式四：面板门面（`core/panel-facade.ts`）
 

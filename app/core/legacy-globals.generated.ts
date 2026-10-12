@@ -269,6 +269,8 @@ export const LEGACY_GLOBAL_NAMES = [
   '_flProxy',
   '_iI',
   '_im',
+  '_matterAttach',
+  '_matterDetach',
   '_panelRefresh',
   '_panelRefreshAndClamp',
   '_ringDedupOK',
@@ -956,4 +958,4 @@ export const LEGACY_GLOBAL_NAMES = [
 ] as const;
 
 /** Count of declarations, for diagnostics and the sanity check in tests. */
-export const LEGACY_GLOBAL_COUNT = 941;
+export const LEGACY_GLOBAL_COUNT = 943;

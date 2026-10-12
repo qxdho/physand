@@ -105,6 +105,10 @@ export interface MatterNamespace {
   Sleeping?: {
     set?: (body: unknown, isSleeping: boolean) => void;
   };
+  Composite?: {
+    add?: (composite: unknown, body: unknown) => void;
+    remove?: (composite: unknown, body: unknown, deep?: boolean) => void;
+  };
 }
 
 /** Top-level legacy functions the new code calls. */
