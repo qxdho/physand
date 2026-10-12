@@ -42,6 +42,7 @@ import { installFormulaFacade } from './core/formula-facade';
 import { installDragFacade } from './core/drag-facade';
 import { installViewportFacade } from './core/viewport';
 import { drawParticles } from './render/particles';
+import { drawBlackHole, drawHinge, drawRope, drawSnapMarker } from './render/devices';
 
 // Side-effect imports: these modules perform the `params.register(...)` calls.
 // Without them the registry is EMPTY at boot, the hook claims no ids, and the
@@ -171,7 +172,13 @@ function boot(): void {
   installViewportFacade();
   // Phase C: extracted renderers. Published so the legacy draw path can call
   // them while the remaining call sites migrate in groups.
-  (globalThis as unknown as Record<string, unknown>).__renderModules = { drawParticles };
+  (globalThis as unknown as Record<string, unknown>).__renderModules = {
+    drawParticles,
+    drawRope,
+    drawHinge,
+    drawBlackHole,
+    drawSnapMarker,
+  };
   evaluateAsClassicScript(
     appSource,
     LEGACY_GLOBAL_NAMES,

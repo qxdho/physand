@@ -342,7 +342,17 @@ test('geometry-dependent renderers are not extracted yet', () => {
     .map((f) => f.replace(/\.ts$/, ''));
 
   // Only these are cleared for extraction; add to this list deliberately.
-  const approved = new Set(['surface', 'particles']);
+  /* Cleared by the renderer audit: zero key globals read as values AND zero
+   * external function calls. Each was checked individually rather than as a
+   * group, since a single shared dependency would make the whole group
+   * un-movable.
+   *
+   *   drawSnapMarker(x,y)   reads nothing
+   *   drawRope(B,slack)     B.e0, B.e1, B.len, B.nodes, B.anc
+   *   drawHinge(B)          B.e0, B.e1, B.anc
+   *   drawBlackHole(B)      B.bh, B.x, B.y
+   */
+  const approved = new Set(['surface', 'particles', 'devices']);
   const unapproved = extracted.filter((f) => !approved.has(f));
   assert.deepEqual(
     unapproved,

@@ -178,7 +178,7 @@ shape-stretch-width  shape-stretch-identity  shape-fixed-holds
 spring-soft-sag  spring-stiff-sag  rod-length-changed
 ```
 
-另有 **137 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
+另有 **149 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
 
 ```bash
 npm run test:unit # 新模块单测（最快，先跑）
@@ -503,11 +503,44 @@ after:   drawParticles(surface, particles)
 **并且验证了模块路径真的在跑**：用探针替换模块实现后，legacy 的 `drawParticles` 调用被拦截
 ⇒ 确实是**委托**，不是静默回退到旧代码。
 
+#### 第二批提取：按「读了什么」分层，而不是按名字
+
+第一次提取后我把剩下所有渲染器逐个量了两个指标：**作为值读取了哪些共享全局**、
+**调用了哪些外部函数**。结果自动分成了层：
+
+| 层 | 函数 | 关键全局 | 外部调用 |
+|---|---|---|---|
+| ✅ 干净 | `drawRope` `drawHinge` `drawBlackHole` `drawSnapMarker` | 0 | 0 |
+| 中等 | `drawSpring` `drawFieldE` `drawGroundBody` `drawBeltBody` | 0 | 1–8 个常量 |
+| 脏 | `render` `drawTrails` `drawBoundaries` `drawPendingHint` | `W`/`bodies`/`grab` | 2–18 |
+
+只搬第一层 —— 它们**输入全是参数或参数字段**，正是能跨模块边界的形状。
+（`drawRope(B,slack)` 只读 `B.e0/e1/len/nodes/anc`；`drawSnapMarker(x,y)` 什么都不读。）
+
+**等价性证据**：四个渲染器 × 每一个分支，逐像素比对：
+
+| 用例 | 哈希 | 着色像素 |
+|---|---|---|
+| `drawSnapMarker` | ✅ | 112 |
+| `drawRope` 抛物线分支 | ✅ | 708 |
+| `drawRope` 链式分支 | ✅ | 670 |
+| `drawHinge` 双锚（不画臂） | ✅ | 184 |
+| `drawHinge` 未双锚（画臂） | ✅ | 508 |
+| `drawBlackHole` 全分支 | ✅ | 6324 |
+
+并验证四个调用**确实都走到模块**（探针替换后全部被拦截）。
+
+> ⚠️ 一个我差点漏掉的坑：**守卫「没报错」不等于「守卫在跑」**。
+> 我注入违规代码后 grep 输出没看到失败，一度以为守卫是空转的。
+> 实际是两件事叠加：① 我的 grep 模式太窄，没匹配到真实失败行；
+> ② 守卫**确实在跑、也确实报错了**（`app/render/devices.test.ts` 整个文件非零退出）。
+> 记下来是因为「验证验证本身」这一步很容易做得比看起来更马虎。
+
 #### 下一步（阶段 C 路线）
 
 1. ✅ 几何收口
 2. 🚧 **`render/` 边界建立 + 首个渲染器切出**（本轮）
-3. ⬜ 继续切其余 16 个「纯绘制」函数（`drawSpring`/`drawRope`/`drawHinge`/…）
+3. 🚧 继续切其余「纯绘制」函数 —— 已完成 4 个（`drawRope`/`drawHinge`/`drawBlackHole`/`drawSnapMarker`），剩余需先收窄依赖
 4. ⬜ `bodies` 所有权迁移 → `physics/`（需单独设计生命周期）
 5. ⬜ 真 `import` 替换模块桥，删除 `legacy-globals.generated.ts`
 

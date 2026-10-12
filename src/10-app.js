@@ -12533,6 +12533,8 @@ function render(){
   drawToolPreview();
 }
 function drawBlackHole(B){
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawBlackHole){_R.drawBlackHole(cvx,B);return;}
   var bh=B.bh,cx=B.x,cy=B.y;
   var r=Math.max(4,bh.r);
   // ---- 1) gravitational lens: concentric distorted rings around the hole ----
@@ -16543,6 +16545,11 @@ function hingeFoldLimit(B,h0,h1){
 //   同一份画线代码、同一条下垂弧分支，所以「虚影所见 = 松手所得」仍是结构性成立的
 //   （虚影要的是「这是一根绳」的图示；产品绳在静置时绷直、按 J2 必须画直线）。
 function drawRope(B,extraSlack){
+  /* ★★2026-10（阶段 C）：绳/铰链/黑洞/吸附标记四个**纯绘制**渲染器已切到 `app/render/devices.ts`。
+   *  选它们是因为审计后确认：**零关键全局、零外部函数调用**，输入全是参数或参数字段。
+   *  绘制代码逐字符未动（验收标准仍是画布输出不变）。 */
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawRope){_R.drawRope(cvx,B,extraSlack);return;}
   var x0=B.e0.x,y0=B.e0.y,x1=B.e1.x,y1=B.e1.y;
   var dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy)||1;
   var slack=Math.max(0,B.len-L)+(extraSlack>0?extraSlack:0);
@@ -16585,6 +16592,8 @@ function drawRope(B,extraSlack){
 //   上一帧的陈迹（没人再同步它），画到陈迹上就是用户看到的「脱离了还拖一根线」。
 //   单锚/无锚时销心取**有锚端**的位置（e0 同步自宿主，是唯一诚实的坐标）。
 function drawHinge(B){
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawHinge){_R.drawHinge(cvx,B);return;}
   // ★R103-6 复盘：曾把「双臂」收紧成双锚才画（E8），回归证明它破坏了 R101 的
   //   渲染契约（_diag_r101h J4 用桩对象 anc=[null,null] 验证「分开画臂」—— 桩没有锚），
   //   而且 R103-7「脱开还拖一根线」的真正修复是**刚性收敛**（conPull/conProj，C/C2 组），
@@ -16808,6 +16817,8 @@ function drawDeviceGhost(id,cx,cy){
 // 松手后这个点就变成真正的锚点，标记自然消失，不会在画面上留垃圾。
 // 配色用与墨色明显区分的砖红（#CE4A2C ≈ rgba(206,74,44)），一眼能看出是「提示」而不是实体。
 function drawSnapMarker(x,y){
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawSnapMarker){_R.drawSnapMarker(cvx,x,y);return;}
   cvx.beginPath();cvx.arc(x,y,6,0,6.2832);
   cvx.strokeStyle='rgba(206,74,44,0.92)';cvx.lineWidth=1.6;cvx.stroke();
   cvx.beginPath();cvx.arc(x,y,1.9,0,6.2832);
