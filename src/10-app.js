@@ -221,6 +221,20 @@ freeG.push(gO,aO,vO,rO,M2O,halfO,muO,cO,GO,tO,BO,qO,IO,EO,kO,xO);
  *  ⚠ 门面缺失时回退到原写法，保证单独 eval 本文件时也能工作。
  *  ⚠⚠ **仍是同一个数组对象**：约 372 处读取写成 `bodies[i]`/`bodies.length`，
  *  换对象会一次性打断全部。这里只收「增删两种操作」，不搬所有权。 */
+/* ★★2026-10（阶段 C）：**「这个物体还在世界里吗」**的具名查询。
+ *  28 处 `bodies.indexOf(...)` 里有 23 处问的根本不是「第几个」，而是「还活着吗」：
+ *  弹簧锚点、杆锚点、传送带导引、悬浮手柄、锁定宿主、轨道父体 —— 凡是「一个物体持有
+ *  另一个物体的引用」的地方都在重复同一条规则。
+ *  漏写 `>= 0` 会得到一个**看起来像布尔值的数字**，于是错误静默通过。
+ *  ⇒ 收成具名查询。**这是只读操作**，即使某处转换有误也不会改变行为，
+ *  最多表现为「把失效引用当成活的」，而回放场景里的锚点释放用例正好覆盖它。
+ *  ⚠ 门面缺失时回退到原写法。 */
+function _bodyAlive(B){
+  if(B==null)return false;
+  var BL=(typeof globalThis!=='undefined')?globalThis.__bodyList:null;
+  if(BL&&BL.isAlive)return BL.isAlive(B);
+  return bodies.indexOf(B)>=0;
+}
 function _bodyRemove(B){
   var BL=(typeof globalThis!=='undefined')?globalThis.__bodyList:null;
   if(BL&&BL.remove)return BL.remove(B);
@@ -1561,7 +1575,7 @@ function rodSyncAnchors(B,dt){
   var w=[null,null],n=0,i;
   for(i=0;i<2;i++){
     var a=B.anc[i];if(!a)continue;
-    if(!a.B||a.B.dead||bodies.indexOf(a.B)<0){B.anc[i]=null;continue;}   // 宿主没了 → 这一端自动自由
+    if(!a.B||a.B.dead||!_bodyAlive(a.B)){B.anc[i]=null;continue;}   // 宿主没了 → 这一端自动自由
     w[i]=springAnchoredWorld(B,i);
     if(w[i])n++;
   }
@@ -2048,7 +2062,7 @@ function rodDragPinHosts(B,relax){
   for(var i=0;i<2;i++){
     var a=B.anc[i];if(!a||!a.B)continue;
     var h=a.B;
-    if(h.dead||bodies.indexOf(h)<0){B.anc[i]=null;continue;}   // 宿主没了 ⇒ 这一端自动自由
+    if(h.dead||!_bodyAlive(h)){B.anc[i]=null;continue;}   // 宿主没了 ⇒ 这一端自动自由
     if(!hostIsAnvil(h)&&!springHostPinnedByAnvil(h,B))continue; // 可动端在下面第二趟处理
     var w=springAnchoredWorld(B,i),q=rodEndWorld(B,i);
     if(!w||!q)continue;
@@ -2065,7 +2079,7 @@ function rodDragPinHosts(B,relax){
   for(var j=0;j<2;j++){
     var a2=B.anc[j];if(!a2||!a2.B)continue;
     var h2=a2.B;
-    if(h2.dead||bodies.indexOf(h2)<0)continue;
+    if(h2.dead||!_bodyAlive(h2))continue;
     if(hostIsAnvil(h2)||springHostPinnedByAnvil(h2,B))continue;  // 铁砧不动（已在第一趟处理）
     var q2=rodEndWorld(B,j),w2=springAnchoredWorld(B,j);
     if(!q2||!w2)continue;
@@ -2122,8 +2136,8 @@ var ROD_CHAIN_MAXLINK=12;    // 链上最多处理多少根杆（防病态数据
 function rodResyncRodPose(B){
   if(!B||B.dead||B.kind!=='T'||!B.anc)return false;
   var h0=B.anc[0]?B.anc[0].B:null,h1=B.anc[1]?B.anc[1].B:null;
-  if(h0&&(h0.dead||bodies.indexOf(h0)<0))h0=null;
-  if(h1&&(h1.dead||bodies.indexOf(h1)<0))h1=null;
+  if(h0&&(h0.dead||!_bodyAlive(h0)))h0=null;
+  if(h1&&(h1.dead||!_bodyAlive(h1)))h1=null;
   var w0=h0?springAnchoredWorld(B,0):null,w1=h1?springAnchoredWorld(B,1):null;
   if(!w0&&!w1)return false;
   if(w0&&w1){
@@ -2176,7 +2190,7 @@ function rodDragPinChain(seed){
   var pullSet=[seed];                               // 「被拖侧」集合 = {被拖体} ∪ {被拖体的宿主}
   if(seed.anc)for(i=0;i<2;i++){
     var sa=seed.anc[i];
-    if(sa&&sa.B&&!sa.B.dead&&bodies.indexOf(sa.B)>=0&&pullSet.indexOf(sa.B)<0)pullSet.push(sa.B);
+    if(sa&&sa.B&&!sa.B.dead&&_bodyAlive(sa.B)&&pullSet.indexOf(sa.B)<0)pullSet.push(sa.B);
   }
   var any=false;
   seed._dragPin=true;
@@ -2226,7 +2240,7 @@ function rodDragPinChain(seed){
            *  （按住不动时突然崩开），A 组反而从 11.6 涨到 24~25px => 弊大于利，撤销。
            *  结论：链解里**不要在产品自管位姿的 W 体上写角度**（与 R130c「W 体位姿归产品、
            *  Matter 约束不可用」是同一条边界）。A 组的残余另开一路（待下一轮）。 */
-          if(o&&!o.dead&&bodies.indexOf(o)>=0&&seen.indexOf(o)<0){seen.push(o);q.push(o);}
+          if(o&&!o.dead&&_bodyAlive(o)&&seen.indexOf(o)<0){seen.push(o);q.push(o);}
         }
       }
       /* ★★R131-62（用户：「多杆连接物体时拖动分离还是没有解决」）：
@@ -2432,7 +2446,7 @@ function springSyncEnds(B){
     var a=B.anc[i];
     if(!a)continue;
     // 宿主没了（被删除/被黑洞吃掉）-> 锚自动失效，那一端就地变成自由端
-    if(!a.B||a.B.dead||bodies.indexOf(a.B)<0){B.anc[i]=null;continue;}
+    if(!a.B||a.B.dead||!_bodyAlive(a.B)){B.anc[i]=null;continue;}
     var p=springAnchoredWorld(B,i);
     springSetEnd(B,i,p.x,p.y);
   }
@@ -6216,7 +6230,7 @@ function detachFieldGlyph(d){
   if(!d||!d.body)return false;
   var B=d.body;
   var isField=(B.kind==='B'||B.kind==='E'||B.kind==='q'||B.kind==='I');
-  var inWorld=(bodies.indexOf(B)>=0);
+  var inWorld=(_bodyAlive(B));
   if(!isField&&inWorld)return false;      /* 正常公式体的字形：照旧，不动 */
   if(B.glyphs){var i=B.glyphs.indexOf(d);if(i>=0)B.glyphs.splice(i,1);}
   d.body=null;d.inBody=false;
@@ -8462,7 +8476,7 @@ function refreshHover(){
     }
     hoverB=best;
     // 见 refreshHover 开头 onRotHandle / onRodHandle 的说明（DOM 手柄悬空 → 用上一帧宿主顶住）
-    if(!hoverB&&onRodHandle&&rodHov&&!rodHov.dead&&bodies.indexOf(rodHov)>=0)hoverB=rodHov;
+    if(!hoverB&&onRodHandle&&rodHov&&!rodHov.dead&&_bodyAlive(rodHov))hoverB=rodHov;
     if(!hoverB&&onRotHandle)hoverB=handleBody;
   }
   // ------ field-area resize handle (or resizing): pointer on the E-square / B-circle border ------
@@ -8563,7 +8577,7 @@ function refreshHover(){
     if(springCanRotate(hov2)||(hov2.kind==='W'&&hov2.fixed)){
       handleKeep=hov2;handleLinger=nowMs+HANDLE_LINGER;
     }
-  }else if(handleKeep&&nowMs<handleLinger&&!handleKeep.dead&&bodies.indexOf(handleKeep)>=0){
+  }else if(handleKeep&&nowMs<handleLinger&&!handleKeep.dead&&_bodyAlive(handleKeep)){
     hov2=handleKeep;
   }else handleKeep=null;
   if(hov2&&(hov2.hasA||hov2.kind==='T'||hov2.kind==='E'||springCanRotate(hov2)
@@ -8605,7 +8619,7 @@ function refreshHover(){
   // 「怎么把两个端点写回去」按宿主分派（见 rodEndWorld / beltEndWorld 与 setBeltEnds）。
   else if(!grab.kind&&hoverB&&!hoverB.dead
           &&(hoverB.kind==='T'||(hoverB.kind==='W'&&(hoverB.belt||hoverB.gnd))))showRod=hoverB;
-  if(showRod&&!showRod.dead&&bodies.indexOf(showRod)>=0){
+  if(showRod&&!showRod.dead&&_bodyAlive(showRod)){
     var ew=showRod.belt?beltEndWorld:rodEndWorld;
     for(var ri1=0;ri1<2;ri1++){
       var rp=ew(showRod,ri1);
@@ -10432,7 +10446,7 @@ var BH_LOCKH=null;
 function grabLocked(){
   if(BH_FINALE)return true;
   if(!BH_LOCKH)return false;
-  if(!BH_LOCKH.dead&&bodies.indexOf(BH_LOCKH)>=0)return true;
+  if(!BH_LOCKH.dead&&_bodyAlive(BH_LOCKH))return true;
   BH_LOCKH=null;
   return false;
 }
@@ -10504,13 +10518,13 @@ function killBody(B){
   if(B.go){
     var gD=B.go, txd=-Math.sin(gD.ang), tyd=Math.cos(gD.ang);
     var P2=(gD.bin)?gD.by:null;
-    if(P2&&bodies.indexOf(P2)>=0){
+    if(P2&&_bodyAlive(P2)){
       P2.vx=txd*gD.w*(gD.rad*((gD.bin)?gD.rP:1));P2.vy=tyd*gD.w*(gD.rad*((gD.bin)?gD.rP:1));
       P2.goB=null;
     }
     B.go=null;
   }
-  if(B.goB&&bodies.indexOf(B.goB)>=0){
+  if(B.goB&&_bodyAlive(B.goB)){
     var H=B.goB,gH=H.go;
     if(gH){var txd2=-Math.sin(gH.ang),tyd2=Math.cos(gH.ang);H.vx=txd2*gH.w*(gH.rad*gH.rB);H.vy=tyd2*gH.w*(gH.rad*gH.rB);H.go=null;}
     H.goB=null;
@@ -11256,7 +11270,7 @@ function maybeStartFinale(){
    *  再也进不来。这里加**自愈**：finale 的宿主已死/不在场/超时 ⇒ 清掉再继续。 */
   if(BH_FINALE){
     var _fh=BH_FINALE.hole;
-    var _stale=(!_fh||_fh.dead||bodies.indexOf(_fh)<0||
+    var _stale=(!_fh||_fh.dead||!_bodyAlive(_fh)||
                 (BH_FINALE.t0&&performance.now()-BH_FINALE.t0>25000));
     if(_stale)BH_FINALE=null;else return;
   }
@@ -11449,8 +11463,8 @@ function annihBody(O,idx){
   removeMatterBody(O);    // if a boundary is swallowed, its Matter body goes with it
   /* ★2026-10（阶段 C）：移除改经 physics/body-list 门面（身份移除的唯一实现）。 */
   _bodyRemove(O);
-  if(O.go){var gD=O.go;if(gD.bin){var P2=gD.by;if(P2&&bodies.indexOf(P2)>=0){P2.vx=-Math.sin(gD.ang)*gD.w*gD.rad*gD.rP;P2.vy=Math.cos(gD.ang)*gD.w*gD.rad*gD.rP;P2.goB=null;}}O.go=null;}
-  if(O.goB&&bodies.indexOf(O.goB)>=0){var H2=O.goB,gH2=H2.go;if(gH2){H2.vx=-Math.sin(gH2.ang)*gH2.w*gH2.rad*gH2.rB;H2.vy=Math.cos(gH2.ang)*gH2.w*gH2.rad*gH2.rB;H2.go=null;}O.goB.goB=null;}
+  if(O.go){var gD=O.go;if(gD.bin){var P2=gD.by;if(P2&&_bodyAlive(P2)){P2.vx=-Math.sin(gD.ang)*gD.w*gD.rad*gD.rP;P2.vy=Math.cos(gD.ang)*gD.w*gD.rad*gD.rP;P2.goB=null;}}O.go=null;}
+  if(O.goB&&_bodyAlive(O.goB)){var H2=O.goB,gH2=H2.go;if(gH2){H2.vx=-Math.sin(gH2.ang)*gH2.w*gH2.rad*gH2.rB;H2.vy=Math.cos(gH2.ang)*gH2.w*gH2.rad*gH2.rB;H2.go=null;}O.goB.goB=null;}
   O.diss=true;
   for(var j=0;j<O.glyphs.length;j++){
     var g=O.glyphs[j];
@@ -12700,7 +12714,7 @@ function stepGravity(dt){
   // must be able to form on their own.
   function releaseGo(Bb){
     var go=Bb.go;if(!go)return;
-    if(go.bin&&go.by&&bodies.indexOf(go.by)>=0){go.by.goB=null;}
+    if(go.bin&&go.by&&_bodyAlive(go.by)){go.by.goB=null;}
     var tx=-Math.sin(go.ang),ty=Math.cos(go.ang);
     Bb.vx=tx*go.w*go.rad;Bb.vy=ty*go.w*go.rad;
     Bb.go=null;
@@ -12720,7 +12734,7 @@ function stepGravity(dt){
     if(grab.kind==='body'&&grab.obj===B)continue;
     if(B.goB){
       // partner of a binary pair — the holder integrates it; clear stale links only
-      if(bodies.indexOf(B.goB)<0)B.goB=null;
+      if(!_bodyAlive(B.goB))B.goB=null;
       continue;
     }
     var best=null,bd=1e9,bcx=0,bcy=0;
@@ -12747,7 +12761,7 @@ function stepGravity(dt){
       var P=null,pp=1e9;
       if(B.go&&B.go.bin){
         var oldP=B.go.by;
-        if(bodies.indexOf(oldP)>=0){P=oldP;pp=Math.hypot(P.x-B.x,P.y-B.y);}
+        if(_bodyAlive(oldP)){P=oldP;pp=Math.hypot(P.x-B.x,P.y-B.y);}
         else B.go=null;
       }
       if(!P){
@@ -14986,7 +15000,7 @@ function stepMatter(dt){
          只判 'body' 会让拖手柄时杆的弹簧约束继续拉扯 —— 表现为手柄拖不动。 */
       if(_grabBody()===RQ&&(_grabIsKind('body')||_grabIsKind('rodlen')))continue;
       if(RQ.anc[0].B&&!RQ.anc[0].B.dead&&RQ.anc[1].B&&!RQ.anc[1].B.dead&&
-         bodies.indexOf(RQ.anc[0].B)>=0&&bodies.indexOf(RQ.anc[1].B)>=0){
+         _bodyAlive(RQ.anc[0].B)&&_bodyAlive(RQ.anc[1].B)){
         var q0=springAnchoredWorld(RQ,0),q1=springAnchoredWorld(RQ,1);
         if(q0&&q1){
           RQ.x=(q0.x+q1.x)/2;RQ.y=(q0.y+q1.y)/2;

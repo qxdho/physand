@@ -156,7 +156,13 @@ function bridge(initial: LegacyBody[]) {
   const g = globalThis as Record<string, unknown>;
   return { arr, bridge: g[BODY_LIST_KEY] as ReturnType<typeof readBridge> };
 }
-function readBridge(): { add(b: LegacyBody): LegacyBody; indexOf(b: unknown): number; remove(b: unknown): boolean; removeAt(i: number): void } {
+function readBridge(): {
+  add(b: LegacyBody): LegacyBody;
+  indexOf(b: unknown): number;
+  isAlive(b: unknown): boolean;
+  remove(b: unknown): boolean;
+  removeAt(i: number): void;
+} {
   return (globalThis as Record<string, unknown>)[BODY_LIST_KEY] as never;
 }
 
@@ -220,4 +226,63 @@ test('the bridge resolves the array lazily, not at install time', () => {
   b.add(late);
   assert.equal(arr.length, 1, 'writes reach the array created later');
   assert.equal(b.indexOf(late), 0);
+});
+
+/* --------------------------------------------------------------------------
+ * Liveness — the semantic query that dominates the legacy indexOf sites
+ * ------------------------------------------------------------------------ */
+
+test('isAlive answers the question the call sites actually ask', () => {
+  /* Of 28 `bodies.indexOf(...)` sites, 23 are liveness checks: "is this anchor
+   * host / referral / handle still in the world?". Naming that intent is the
+   * point, because a dropped `>= 0` yields a NUMBER that reads as truthy.
+   */
+  const { arr, bridge: b } = bridge([]);
+  const live = body(1);
+  arr.push(live);
+
+  assert.equal(b.isAlive(live), true);
+  assert.equal(b.isAlive(body(1)), false, 'a lookalike is not alive');
+  assert.equal(b.isAlive(null), false);
+  assert.equal(b.isAlive(undefined), false);
+});
+
+test('isAlive turns false the moment a body is removed', () => {
+  // This is the case every anchor-release path depends on.
+  const { arr, bridge: b } = bridge([]);
+  const host = body(1);
+  arr.push(host);
+  assert.equal(b.isAlive(host), true);
+  b.remove(host);
+  assert.equal(b.isAlive(host), false);
+});
+
+test('isAlive agrees with indexOf >= 0 in every case', () => {
+  // They must not drift: the helper is a rename of the rule, not a new rule.
+  const { arr, bridge: b } = bridge([]);
+  const a1 = body(1), a2 = body(2), absent = body(3);
+  arr.push(a1, a2);
+
+  for (const probe of [a1, a2, absent, null, undefined]) {
+    assert.equal(
+      b.isAlive(probe),
+      b.indexOf(probe) >= 0,
+      `disagreement for ${JSON.stringify(probe)}`,
+    );
+  }
+});
+
+test('isAlive is false when the array does not exist yet', () => {
+  // Before boot there is no array; a liveness check must answer "no".
+  const g = globalThis as Record<string, unknown>;
+  const saved = g[BODY_LIST_KEY];
+  installBodyListBridge(() => undefined);
+  try {
+    const b = g[BODY_LIST_KEY] as { isAlive(x: unknown): boolean };
+    assert.equal(b.isAlive({ x: 0, y: 0 }), false);
+    assert.equal(b.isAlive(null), false);
+  } finally {
+    if (saved === undefined) delete g[BODY_LIST_KEY];
+    else g[BODY_LIST_KEY] = saved;
+  }
 });

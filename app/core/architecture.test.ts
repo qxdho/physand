@@ -275,6 +275,53 @@ test('body removal goes through the collection module, not a bare splice', () =>
   );
 });
 
+test('body liveness is asked through the named query, not a bare indexOf', () => {
+  /* WHY THIS EXISTS
+   * 23 of the 28 legacy `bodies.indexOf(...)` sites are liveness checks —
+   * "is this anchor host still in the world?" — not position lookups. They now
+   * call \`_bodyAlive()\`, which delegates to the collection module.
+   *
+   * The reason to guard it: \`bodies.indexOf(x) >= 0\` and \`bodies.indexOf(x)\` are
+   * one keystroke apart, and the second form yields a NUMBER, so it is truthy for
+   * every position except -1... which is exactly right until a body sits at
+   * index -1, which cannot happen. The failure is subtler than it looks: a site
+   * that omits the comparison still works, so nothing points at it.
+   *
+   * Genuine index uses remain legal — passing the position to a function that
+   * wants it, or splicing — so this flags only COMPARISONS against zero.
+   */
+  const legacy = readFileSync(join(APP, '..', 'src', '10-app.js'), 'utf8');
+  const lines = legacy.split('\n');
+
+  /* _bodyAlive itself must contain the raw comparison — that is its FALLBACK
+   * for when the bridge is absent. Located by name so the guard survives edits
+   * above it. */
+  const helperStart = lines.findIndex((l) => l.startsWith('function _bodyAlive(B){'));
+  assert.ok(helperStart > 0, '_bodyAlive must exist');
+  let helperEnd = helperStart;
+  for (let i = helperStart, depth = 0; i < lines.length; i++) {
+    depth += (lines[i]!.match(/{/g) ?? []).length;
+    depth -= (lines[i]!.match(/}/g) ?? []).length;
+    if (depth <= 0 && i > helperStart) { helperEnd = i; break; }
+  }
+
+  const offenders: string[] = [];
+  lines.forEach((line, i) => {
+    if (/^\s*\*|^\s*\/\*/.test(line)) return;
+    if (i >= helperStart && i <= helperEnd) return; // the intended fallback
+    if (/bodies\.indexOf\([^)]*\)\s*(>=|<)\s*0/.test(line)) {
+      offenders.push(`L${i + 1}: ${line.trim()}`);
+    }
+  });
+  assert.deepEqual(
+    offenders,
+    [],
+    'these sites ask whether a body is alive with a raw indexOf comparison ' +
+      'instead of _bodyAlive():\n' +
+      offenders.join('\n'),
+  );
+});
+
 test('generated files declare themselves as generated', () => {
   // Someone editing a generated file by hand would have their change silently
   // overwritten by the next `npm run gen`. The header is the warning.

@@ -232,6 +232,29 @@ export interface BodyListBridge {
    * already know the index; they need a splice, not a lookup.
    */
   removeAt(index: number): void;
+  /**
+   * True when the body is still in the world.
+   *
+   * WHY THIS DESERVES A NAME
+   * -----------------------
+   * Of the 28 `bodies.indexOf(...)` call sites in the legacy file, 23 are not
+   * really about a position at all — they ask a LIVENESS question:
+   *
+   *   bodies.indexOf(a.B) >= 0      "is this anchor host still alive?"
+   *   bodies.indexOf(o) < 0         "has this referral gone stale?"
+   *
+   * The pattern appears wherever one body holds a reference to another: spring
+   * anchors, rod anchors, belt guides, hover handles, lock hosts, orbit
+   * parents. Each site re-derives the same rule, and a dropped `>= 0` reads as
+   * a valid number rather than a boolean, so the mistake stays quiet.
+   *
+   * Naming it makes the intent visible and gives the rule one home. It is also
+   * the narrowest possible first step: this is a READ-ONLY query, so it cannot
+   * change behaviour even if a site is converted wrongly — a wrong answer
+   * shows up as a stale reference being treated as live, which the replay suite
+   * exercises through the anchor-release scenarios.
+   */
+  isAlive(body: unknown): boolean;
 }
 
 export const BODY_LIST_KEY = '__bodyList';
@@ -252,6 +275,10 @@ export function installBodyListBridge(readArray: () => LegacyBody[] | undefined)
     },
     indexOf(body) {
       return readArray()?.indexOf(body as LegacyBody) ?? -1;
+    },
+    isAlive(body) {
+      const arr = readArray();
+      return !!arr && arr.indexOf(body as LegacyBody) >= 0;
     },
     remove(body) {
       const arr = readArray();
