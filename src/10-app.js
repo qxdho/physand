@@ -11586,6 +11586,14 @@ function stepShake(dt){
   if(shakeT>=shakeDur){document.body.style.transform='';shakeOn=false;shakeAmp=0;shakeDur=0;}
 }
 function resize(){
+  /* ★★2026-10（阶段 C）：`resize()` 是全项目**唯一**写画布几何的地方
+   *  （`W` 被 413 处引用、110 个函数读取，是粘连「巨型连通分量」的两大原因之一）。
+   *  几何仍写在这两个全局上（几百处读取暂时不动），但**同时**公布给视口模块 ——
+   *  于是「依赖画面几何」这件事从**自由变量**变成**具名接口**，
+   *  渲染/排版/命中测试这些只需要几何的函数组才有可能按证据切出来。
+   *  ⚠️ **不复制状态**：几何仍以 `W`/`H`/`groundY` 为唯一真源，
+   *  视口模块每次调用都**实时读取**它们（getter 语义）。
+   *  在这里再存一份会让 resize 变得可能不同步 —— 那正是本项目反复踩过的坑。 */
   W=window.innerWidth;H=window.innerHeight;
   groundY=Math.round(H*0.8);
   // full-screen reach: every point inside the canvas is influenced; pull tapers to 0 at the

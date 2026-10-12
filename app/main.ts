@@ -40,6 +40,7 @@ import { PANEL_FACADE_EPILOGUE, PANEL_FACADE_KEY, type PanelFacade } from './cor
 import { installMatterBridge } from './core/matter-bridge';
 import { installFormulaFacade } from './core/formula-facade';
 import { installDragFacade } from './core/drag-facade';
+import { installViewportFacade } from './core/viewport';
 
 // Side-effect imports: these modules perform the `params.register(...)` calls.
 // Without them the registry is EMPTY at boot, the hook claims no ids, and the
@@ -166,6 +167,7 @@ function boot(): void {
   installMatterBridge();
   installFormulaFacade();
   installDragFacade();
+  installViewportFacade();
   evaluateAsClassicScript(
     appSource,
     LEGACY_GLOBAL_NAMES,

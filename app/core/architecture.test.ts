@@ -246,3 +246,49 @@ test('generated files declare themselves as generated', () => {
     );
   }
 });
+
+test('module code reads canvas geometry through the viewport module, not globals', () => {
+  /* WHY THIS EXISTS (phase C)
+   * A call-graph analysis found 476 of 555 legacy functions in ONE connected
+   * component — there is no clean seam to cut modules along. Drilling in found
+   * the glue is largely two variables: `W` (413 references, read by 110
+   * functions) and `bodies` (372, read by 104).
+   *
+   * Geometry is the tractable half: it is written in exactly one place
+   * (`resize()`), so it can be read through a named surface immediately. That is
+   * what `core/viewport.ts` provides, and it is the prerequisite for extracting
+   * rendering and layout groups later.
+   *
+   * This guard keeps new module code from re-introducing the free-variable
+   * dependency that made those groups inseparable in the first place.
+   */
+  const allowed = new Set([
+    'core/legacy.ts', // reads the globals on the module's behalf
+    'core/viewport.ts', // owns the geometry surface
+  ]);
+  const geometry = /\b(W|H|groundY|PX_PER_M|BND_INK|CEL_INSET|BH_REACH)\b/;
+  // `W`/`H` as identifiers are only meaningful when they appear bare, not as a
+  // property name or inside a longer word.
+  const bareGeometry = /(?<![.\w])(W|H|groundY|PX_PER_M|BND_INK|CEL_INSET|BH_REACH)(?![\w(])/;
+
+  const offenders: string[] = [];
+  for (const { rel, text } of appSources()) {
+    if (allowed.has(rel)) continue;
+    const code = stripCommentsAndStrings(text);
+    for (const line of code.split('\n')) {
+      // Only flag lines that READ geometry; declaring a local named W is fine
+      // but shadowing a canvas dimension inside app code is exactly the bug.
+      if (bareGeometry.test(line) && !/^\s*(import|export)\b/.test(line)) {
+        offenders.push(`${rel}: ${line.trim()}`);
+      }
+    }
+  }
+  void geometry;
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `these module lines depend on canvas geometry globals instead of ` +
+      `core/viewport.ts:\n${offenders.join('\n')}`,
+  );
+});
