@@ -11485,6 +11485,9 @@ function drawParticles(){
  *     与物理里 `Bz` 的符号语义一致（`Bz>0` 为 +z 出屏）。
  *   ★原来这里**只画点**，`Bz` 的符号完全没进绘制 ⇒ 调成负数看不出任何变化。 */
 function drawFieldDots(cx,cy,R,bz){
+  /* ★★2026-10（阶段 C）：纯绘制函数已切到 `app/render/field.ts`（零全局、零外部调用）。 */
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawFieldDots){_R.drawFieldDots(cvx,cx,cy,R,bz);return;}
   var into=(bz!=null&&bz<0);                 /* 场背向观察者 ⇒ 叉 */
   var col='rgba(38,34,28,0.16)',colS='rgba(38,34,28,0.28)';
   cvx.fillStyle=col;cvx.strokeStyle=colS;cvx.lineWidth=1.3;
@@ -11521,6 +11524,8 @@ function drawFieldDots(cx,cy,R,bz){
 // e.g. u=(1,0) -> the +x edge (er.r); u=(0,-1) -> the TOP edge (er.t). Used so the arrow
 // spread, the rotate knob and the resize bar all agree with the real per-edge geometry.
 function boxExtentAlong(ux,uy,er){
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.boxExtentAlong)return _R.boxExtentAlong(ux,uy,er);
   if(Math.abs(ux)>=Math.abs(uy))return ux>=0?er.r:er.l;
   return uy>=0?er.b:er.t;
 }
@@ -11763,6 +11768,8 @@ function springHostSurfDist(H,px,py,ux,uy){
  * 只读 {x,y,th,len} 四样 ⇒ 喂真杆或喂一个桩对象都画出逐像素相同的木板线，
  * 于是「虚影所见 = 松手所得」是结构上保证的（与 drawSpring 同一手法，见 drawDeviceGhost）。 */
 function drawRodPlank(B){
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawRodPlank){_R.drawRodPlank(cvx,B);return;}
   var tht=B.th||0,cth=Math.cos(tht),sth=Math.sin(tht),hl=(B.len||170)/2;
   var x1=B.x-cth*hl,y1=B.y-sth*hl,x2=B.x+cth*hl,y2=B.y+sth*hl;
   cvx.strokeStyle='rgba(38,34,28,0.85)';

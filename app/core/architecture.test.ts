@@ -352,7 +352,9 @@ test('geometry-dependent renderers are not extracted yet', () => {
    *   drawHinge(B)          B.e0, B.e1, B.anc
    *   drawBlackHole(B)      B.bh, B.x, B.y
    */
-  const approved = new Set(['surface', 'particles', 'devices']);
+  /* field.ts cleared the same way: zero key globals, and its only external calls
+   are to pure helpers (rgba) that were verified stateless. */
+  const approved = new Set(['surface', 'particles', 'devices', 'field']);
   const unapproved = extracted.filter((f) => !approved.has(f));
   assert.deepEqual(
     unapproved,

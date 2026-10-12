@@ -43,6 +43,7 @@ import { installDragFacade } from './core/drag-facade';
 import { installViewportFacade } from './core/viewport';
 import { drawParticles } from './render/particles';
 import { drawBlackHole, drawHinge, drawRope, drawSnapMarker } from './render/devices';
+import { boxExtentAlong, drawFieldDots, drawRodPlank } from './render/field';
 
 // Side-effect imports: these modules perform the `params.register(...)` calls.
 // Without them the registry is EMPTY at boot, the hook claims no ids, and the
@@ -178,6 +179,9 @@ function boot(): void {
     drawHinge,
     drawBlackHole,
     drawSnapMarker,
+    drawFieldDots,
+    drawRodPlank,
+    boxExtentAlong,
   };
   evaluateAsClassicScript(
     appSource,

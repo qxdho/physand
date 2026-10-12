@@ -178,7 +178,7 @@ shape-stretch-width  shape-stretch-identity  shape-fixed-holds
 spring-soft-sag  spring-stiff-sag  rod-length-changed
 ```
 
-另有 **149 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
+另有 **162 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
 
 ```bash
 npm run test:unit # 新模块单测（最快，先跑）
@@ -536,11 +536,41 @@ after:   drawParticles(surface, particles)
 > ② 守卫**确实在跑、也确实报错了**（`app/render/devices.test.ts` 整个文件非零退出）。
 > 记下来是因为「验证验证本身」这一步很容易做得比看起来更马虎。
 
+#### 第三批提取：把「修过的 bug」搬进可以测试的地方
+
+这批选的是只依赖**纯辅助函数**的三个：`drawFieldDots`、`drawRodPlank`、`boxExtentAlong`。
+
+> `boxExtentAlong` 一起搬，是因为它本身就是纯算术，且被 `drawFieldE` 调用 ——
+> 留在原地会让「渲染器在模块里、它的几何助手却在遗留文件里」，没有道理。
+
+**这批最大的收益不是整洁，而是可测性。** `drawRodPlank` 里带着一个**修过的真实 bug**：
+
+> R105-3（用户原话：「不是应该是与物体连接的一端有铰链吗，怎么这个铰链跑到另一端了」）
+> 根因是画销钉时用了**槽位名** `x1`/`x2`，而 `x1` 定义在 **−u 侧**、实际是索引 1
+> ⇒ 锚在索引 1 的杆，销钉画到了索引 0 上。修复前的实测：锚定端墨量 39、自由端 193。
+
+这个「按语义索引取点」的映射以前**只能靠带插桩的浏览器探针验证**；现在它是一条单元测试。
+
+**等价性证据**（每个分支逐像素，并额外验证索引语义）：
+
+| 用例 | 结果 |
+|---|---|
+| `drawFieldDots` bz>0 / bz<0 / bz=0 | ✅ 三者一致且互相不同 |
+| `drawRodPlank` 无锚 / 双锚 / 只锚0 / 只锚1 / 旋转45° | ✅ 全部一致 |
+| `boxExtentAlong` 四方向 + 并列 | ✅ 一致 |
+| **只锚0 与 只锚1 画出不同结果** | ✅ **索引语义正确**（R105-3 的判据） |
+
+并验证三个调用**确实都走模块**、且 `boxExtentAlong` 在模块缺失时能正确回退。
+
+> 一个我自己的测试写错了：旋转 90° 的断言写成精确匹配 `moveTo(0.00,-50.00)`，
+> 但 `Math.cos(Math.PI/2)` 是 `6.1e-17` 而不是 0。
+> 改为**浮点容差比较** —— 否则那条测试测的是浮点噪声，不是旋转。
+
 #### 下一步（阶段 C 路线）
 
 1. ✅ 几何收口
 2. 🚧 **`render/` 边界建立 + 首个渲染器切出**（本轮）
-3. 🚧 继续切其余「纯绘制」函数 —— 已完成 4 个（`drawRope`/`drawHinge`/`drawBlackHole`/`drawSnapMarker`），剩余需先收窄依赖
+3. 🚧 继续切「纯绘制」函数 —— 已完成 7 个（+ `drawFieldDots`/`drawRodPlank`/`boxExtentAlong`），剩余需先把常量收成参数
 4. ⬜ `bodies` 所有权迁移 → `physics/`（需单独设计生命周期）
 5. ⬜ 真 `import` 替换模块桥，删除 `legacy-globals.generated.ts`
 
