@@ -10322,7 +10322,7 @@ function clearAll(){
              d.el.style.left='';d.el.style.top='';d.el.style.transform='';d.el.style.opacity='';}
   }
   for(var k=freeL.length-1;k>=0;k--){killLetter(freeL[k]);freeL.splice(k,1);}
-  for(var f=formulas.length-1;f>=0;f--){killFormula(formulas[f]);formulas.splice(f,1);}
+  _formulaDestroyAll();
   panel.style.opacity='';   // un-fade the panel after panel-eating has punched it
   // purge any duplicate docked clones left behind by earlier dock bugs — the palette holds
   // exactly the canonical singletons, one cell each.
@@ -10604,7 +10604,7 @@ function spawnFormula(which,x,y,bvx,bvy){
     g.el.style.transformOrigin='center';
     g.el.style.opacity='1';
   }
-  formulas.push(Fo);
+  _formulaAdd(Fo);
   return Fo;
 }
 function spawnText(text,x,y,bvx,bvy){
@@ -10621,7 +10621,7 @@ function spawnText(text,x,y,bvx,bvy){
   g.el.style.transform='translate(-50%,-50%) scale('+Fo.sc+')';
   g.el.style.transformOrigin='center';
   g.el.style.opacity='1';
-  formulas.push(Fo);
+  _formulaAdd(Fo);
   return Fo;
 }
 function stepFormulas(dt){
@@ -10648,7 +10648,7 @@ function stepFormulas(dt){
         var blink=0.35+0.65*Math.abs(Math.sin(F.age*6));
         var fade=clamp(1-idle/2.0,0,1);
         a=blink*fade;
-        if(idle>=2.0){ killFormula(F); formulas.splice(i,1); continue; }
+        if(idle>=2.0){ _formulaDestroy(F); continue; }
       }
     }
     F.alpha=a;
@@ -10661,10 +10661,27 @@ function stepFormulas(dt){
       g.el.style.opacity=a;
     }
     if(F.age>=F.life){
-      killFormula(F);
-      formulas.splice(i,1);
+      _formulaDestroy(F);
     }
   }
+}
+/* ★★2026-10（阶段 B）：浮动公式对象的生命周期经**公式门面**。
+ *  为什么值得收口：「从数组里移除」和「摘掉 DOM」**必须成对发生** ——
+ *  `killFormula` 才是删除字形元素的那个函数，只 splice 不 kill 会**泄漏 DOM 节点**
+ *  （不再显示、但仍在参与布局）。原代码在 4 处各自手写这对动作，没有任何东西保证它们配对。
+ *  ⚠ 门面缺失时回退到原写法。 */
+function _formulaAdd(F){
+  var G=(typeof globalThis!=='undefined')?globalThis.__formulaFacade:null;
+  if(G){G.add(F);return;} formulas.push(F);
+}
+function _formulaDestroy(F){
+  var G=(typeof globalThis!=='undefined')?globalThis.__formulaFacade:null;
+  if(G){G.destroy(F);return;} killFormula(F);var _i=formulas.indexOf(F);if(_i>=0)formulas.splice(_i,1);
+}
+function _formulaDestroyAll(){
+  var G=(typeof globalThis!=='undefined')?globalThis.__formulaFacade:null;
+  if(G){G.destroyAll();return;}
+  for(var f=formulas.length-1;f>=0;f--){killFormula(formulas[f]);formulas.splice(f,1);}
 }
 function killFormula(F){
   for(var i=0;i<F.glyphs.length;i++){
@@ -11041,7 +11058,7 @@ function stepBlackHole(dt){
       var ftap2=clamp(1-fd2/reach,0,1);
       var fp=(20000*bh.r)/(fd2*fd2)*(dt*60)*ftap2;
       F.vx+=fux2*fp*2.2-fuy2*fp*0.5;F.vy+=fuy2*fp*2.2+fux2*fp*0.5;
-      if(fd2<bh.r+10){killFormula(F);formulas.splice(fx,1);burstParticles(B.x,B.y,14,1);}
+      if(fd2<bh.r+10){_formulaDestroy(F);burstParticles(B.x,B.y,14,1);}
     }
     // the debris itself falls in: particles spiral into the hole and wink out at the horizon
     for(var pi=particles.length-1;pi>=0;pi--){

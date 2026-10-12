@@ -38,6 +38,7 @@ import {
 } from './core/recorder-facade';
 import { PANEL_FACADE_EPILOGUE, PANEL_FACADE_KEY, type PanelFacade } from './core/panel-facade';
 import { installMatterBridge } from './core/matter-bridge';
+import { installFormulaFacade } from './core/formula-facade';
 
 // Side-effect imports: these modules perform the `params.register(...)` calls.
 // Without them the registry is EMPTY at boot, the hook claims no ids, and the
@@ -162,6 +163,7 @@ function boot(): void {
   installRecorderFacade();
   installPanelFacade();
   installMatterBridge();
+  installFormulaFacade();
   evaluateAsClassicScript(
     appSource,
     LEGACY_GLOBAL_NAMES,

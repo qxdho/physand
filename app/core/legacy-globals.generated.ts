@@ -267,6 +267,9 @@ export const LEGACY_GLOBAL_NAMES = [
   '_EXPR_VOC',
   '_fhT',
   '_flProxy',
+  '_formulaAdd',
+  '_formulaDestroy',
+  '_formulaDestroyAll',
   '_iI',
   '_im',
   '_matterAttach',
@@ -958,4 +961,4 @@ export const LEGACY_GLOBAL_NAMES = [
 ] as const;
 
 /** Count of declarations, for diagnostics and the sanity check in tests. */
-export const LEGACY_GLOBAL_COUNT = 943;
+export const LEGACY_GLOBAL_COUNT = 946;

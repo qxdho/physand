@@ -37,6 +37,8 @@ export interface LegacyApp {
   bodies: LegacyBody[];
   /** Free (unmerged) letters floating on the canvas. */
   freeL: LegacyLetter[];
+  /** Floating, short-lived formula objects (spawnText, orbit labels, ...). */
+  formulas: unknown[];
   /** Device/tool mode state. */
   TOOL: { mode: string; shape?: string | null; cont?: boolean; stroke?: unknown; drag?: unknown };
   /** Physics mode: 'high' (high school) or 'uni' (university). */
@@ -128,6 +130,13 @@ export interface LegacyFunctions {
   setBeltAngle(belt: LegacyBody, radians: number, mode: unknown): void;
   shortAng(radians: number): number;
   charDefWrite(letter: LegacyLetter, key: string, value: unknown): void;
+  /**
+   * Tear down a floating formula: detach its glyph DOM and mark it dead.
+   *
+   * Declared here even though `formula-facade.ts` is its only caller, because
+   * this map is the audited list of what the new code calls into the legacy app.
+   */
+  killFormula(formula: { glyphs?: { el?: { parentNode?: unknown } }[]; dead?: boolean }): void;
 }
 
 /**
@@ -239,6 +248,19 @@ export function callLegacy<K extends keyof LegacyFunctions>(
  */
 export function refreshBody(body: LegacyBody): void {
   callLegacy('refresh', body);
+}
+
+/**
+ * The live `formulas` array — floating, short-lived formula objects.
+ *
+ * Returned by reference: callers iterate it and remove entries by index while
+ * walking backwards, so a copy would make those removals silently ineffective.
+ * Returns undefined before boot; `formula-facade.ts` turns that into an empty
+ * array so callers can loop unconditionally.
+ */
+export function formulasArray(): unknown[] | undefined {
+  const v = readRaw('formulas');
+  return Array.isArray(v) ? v : undefined;
 }
 
 /** True when the legacy app has booted far enough to expose its body list. */
