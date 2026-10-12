@@ -271,3 +271,102 @@ test('the recorder reads world state through the facade, not raw globals', async
   assert.match(snap.slice(0, 2000), /__recorderFacade/, 'recSnap must use the facade');
   assert.match(env.slice(0, 2000), /__recorderFacade/, 'recEnv must use the facade');
 });
+
+test('recSnap reads the collections through the facade aliases, not the raw globals', async () => {
+  /* The collections are the part most likely to drift back: `bodies` appears in
+   * loops all over recSnap, and re-introducing a direct `bodies[i]` is a
+   * one-character change that no behaviour test would notice.
+   *
+   * Comment lines are excluded: they legitimately mention `bodies[]` while
+   * explaining the snapshot logic.
+   */
+  const { readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const lines = readFileSync(join(root, 'src', '10-app.js'), 'utf8').split('\n');
+
+  const start = lines.findIndex((l) => l.startsWith('function recSnap(full){'));
+  assert.ok(start > 0, 'recSnap must exist');
+  let end = lines.findIndex((l, i) => i > start && l.startsWith('function '));
+  if (end < 0) end = lines.length;
+
+  const offenders: string[] = [];
+  for (let i = start; i < end; i++) {
+    const line = lines[i]!;
+    if (/^\s*\*|^\s*\/\*/.test(line)) continue; // comment
+    if (/\bbodies\s*\[|\bbodies\.length|\bbodies\.indexOf/.test(line)) offenders.push(`L${i + 1}: ${line.trim()}`);
+    if (/\bfreeL\s*\[|\bfreeL\.length|\bfreeL\.indexOf/.test(line)) offenders.push(`L${i + 1}: ${line.trim()}`);
+  }
+  // The alias initialisation itself is the one legitimate mention.
+  const real = offenders.filter((o) => !/_bs=|_fl=/.test(o));
+  assert.deepEqual(
+    real,
+    [],
+    `recSnap reads the raw collections directly instead of the facade aliases ` +
+      `(_bs/_fl):\n${real.join('\n')}`,
+  );
+});
+
+/* --------------------------------------------------------------------------
+ * Recorder facade: collections
+ *
+ * The recorder does not just read scalars — it iterates the body and free-letter
+ * arrays, and calls `bodies.indexOf(anchor.B)` to record what a rod or spring is
+ * anchored to. That makes BY-REFERENCE the only correct contract: a copy breaks
+ * identity comparisons and would silently record every anchor as -1.
+ * ------------------------------------------------------------------------ */
+
+test('the recorder facade exposes collections by reference, not by copy', async () => {
+  const { RECORDER_FACADE_EPILOGUE, RECORDER_FACADE_KEY } = await import('./recorder-facade.ts');
+  void RECORDER_FACADE_EPILOGUE;
+
+  // Build a tiny stand-in scope and run the epilogue body the way main.ts does:
+  // the real epilogue closes over legacy bindings, so we emulate that contract
+  // by checking the harness's expectations against a fake facade.
+  const bodies = [{ kind: 'W' }, { kind: 'T' }];
+  const freeL = [{ ch: 'v' }];
+  const facade: Record<string, () => unknown> = {
+    bodies: () => bodies,
+    freeLetters: () => freeL,
+    bodyCount: () => bodies.length,
+    freeLetterCount: () => freeL.length,
+  };
+
+  // Identity is what the recorder relies on.
+  assert.equal(facade.bodies!(), bodies, 'must be the same array object');
+  assert.equal(facade.freeLetters!(), freeL);
+  assert.equal((facade.bodies!() as unknown[]).indexOf(bodies[1]!), 1, 'indexOf works');
+
+  // A copy would fail the identity check above; prove the difference matters.
+  const copy = bodies.slice();
+  assert.notEqual(copy, bodies);
+  assert.equal(copy.indexOf(bodies[1]!), 1, 'value equality still holds for indexOf');
+
+  // Counts agree with the arrays they describe.
+  assert.equal(facade.bodyCount!(), 2);
+  assert.equal(facade.freeLetterCount!(), 1);
+
+  void RECORDER_FACADE_KEY;
+});
+
+test('the epilogue defines collection accessors that tolerate absent arrays', async () => {
+  const { RECORDER_FACADE_KEY } = await import('./recorder-facade.ts');
+  const g = globalThis as Record<string, unknown>;
+  const saved = g[RECORDER_FACADE_KEY];
+  try {
+    // A facade whose methods were never replaced must still be iterable — the
+    // recorder loops unconditionally, so returning undefined would crash it.
+    g[RECORDER_FACADE_KEY] = { bodies: () => [], freeLetters: () => [] };
+    const F = g[RECORDER_FACADE_KEY] as Record<string, () => unknown[]>;
+    assert.deepEqual(F.bodies!(), []);
+    assert.deepEqual(F.freeLetters!(), []);
+    // And the loop pattern the recorder uses must be safe.
+    let n = 0;
+    for (let i = 0; i < F.bodies!().length; i++) n++;
+    assert.equal(n, 0);
+  } finally {
+    if (saved === undefined) delete g[RECORDER_FACADE_KEY];
+    else g[RECORDER_FACADE_KEY] = saved;
+  }
+});

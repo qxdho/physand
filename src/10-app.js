@@ -17061,6 +17061,11 @@ function recSnap(full){
    *  ⚠ 保留 `RF` 缺失时的原路回退：门面是迁移期设施，它不在时录制器必须照旧能工作
    *  （例如别处单独 eval 这个文件时）。两条路径读的是**同一份真源**，所以取值完全一致。 */
   var RF=(typeof globalThis!=='undefined')?globalThis.__recorderFacade:null;
+  /* ★★2026-10（阶段 B 续）：**集合**也走门面。原函数体里 `bodies` / `freeL` 被循环、
+   *  `bodies.indexOf(...)`、逐体读字段用得很密；这里取一次**引用**（不是拷贝），下面所有用法
+   *  原样不动 —— 既完成收口，又不改动那 200 行有大量实测结论的快照逻辑。
+   *  ⚠ 传引用是必须的：`bodies.indexOf(anchor.B)` 靠的是**同一性**，拷一份就全成 -1。 */
+  var _bs=RF?RF.bodies():bodies, _fl=RF?RF.freeLetters():freeL;
   var f={t:+(recNow()-REC.t0).toFixed(1),
          mode:RF?RF.physMode():(typeof PHYS_MODE!=='undefined'?PHYS_MODE:null),
          g:RF?RF.gravity():(typeof GRAV!=='undefined'?GRAV:null)};
@@ -17069,8 +17074,8 @@ function recSnap(full){
   var _tool=RF?RF.toolDescriptor():((typeof TOOL!=='undefined')?(TOOL.mode+(TOOL.shape?('/'+TOOL.shape):'')):null);
   if(_tool!=null)f.tool=_tool;
   f.bs=[];
-  for(var i=0;i<bodies.length;i++){
-    var B=bodies[i],mb=B&&B.mb;
+  for(var i=0;i<_bs.length;i++){
+    var B=_bs[i],mb=B&&B.mb;
     /* ★★R131-47（自测发现的真因）：**杆（T）/铰链（S+hinge）没有 Matter 体（mb）**
      *  ⇒ 被这里的 `if(!mb)continue` 直接跳过 ⇒ 历次 REC 里**根本没有杆的记录**
      *  （我此前把原因归给"你没刷新页面"，是错的——是我的记录器漏了它们）。
@@ -17170,7 +17175,7 @@ function recSnap(full){
       o.hinge=B.hinge?1:0;
       var _a0=B.anc&&B.anc[0], _a1=B.anc&&B.anc[1];
       o.anc=[_a0?1:0,_a1?1:0];
-      o.ancI=[(_a0&&_a0.B)?bodies.indexOf(_a0.B):-1,(_a1&&_a1.B)?bodies.indexOf(_a1.B):-1];
+      o.ancI=[(_a0&&_a0.B)?_bs.indexOf(_a0.B):-1,(_a1&&_a1.B)?_bs.indexOf(_a1.B):-1];
       o.ox=[_a0?+(_a0.ox||0).toFixed(2):null,_a1?+(_a1.ox||0).toFixed(2):null];
       o.oy=[_a0?+(_a0.oy||0).toFixed(2):null,_a1?+(_a1.oy||0).toFixed(2):null];
       try{
@@ -17186,8 +17191,8 @@ function recSnap(full){
   //   第一版写了 `typeof springs!=='undefined' && …` ⇒ 恒 false、把全部弹簧**静默**漏掉
   //   （守卫式访问在本项目反复成坑：符号不存在必须**大声**，不能悄悄跳过）。
   var sps=[];
-  for(var q=0;q<bodies.length;q++){
-    var S=bodies[q];
+  for(var q=0;q<_bs.length;q++){
+    var S=_bs[q];
     if(!S||S.dead||S.kind!=='S'||!S.e0||!S.e1)continue;
     var _sp={i:q,ks:S.ks,len:+(S.len||0).toFixed(2),cur:+(S.cur||0).toFixed(2),
               th:(S.th==null?null:+(+S.th).toFixed(4)),
@@ -17201,8 +17206,8 @@ function recSnap(full){
      *  这里与杆同款补齐：锚定标志 / 锚到的体序号 / 锚点本地偏移 / 压缩状态量。 */
     var _sa0=S.anc&&S.anc[0], _sa1=S.anc&&S.anc[1];
     _sp.anc=[_sa0?1:0,_sa1?1:0];
-    _sp.ancI=[(_sa0&&_sa0.B)?bodies.indexOf(_sa0.B):-1,
-              (_sa1&&_sa1.B)?bodies.indexOf(_sa1.B):-1];
+    _sp.ancI=[(_sa0&&_sa0.B)?_bs.indexOf(_sa0.B):-1,
+              (_sa1&&_sa1.B)?_bs.indexOf(_sa1.B):-1];
     _sp.ox=[_sa0?+(_sa0.ox||0).toFixed(2):null,_sa1?+(_sa1.ox||0).toFixed(2):null];
     _sp.oy=[_sa0?+(_sa0.oy||0).toFixed(2):null,_sa1?+(_sa1.oy||0).toFixed(2):null];
     if(S._capCmp)_sp.cmp=+S._capCmp.toFixed(2);      // 端帽压缩量（接触-形变状态）
@@ -17214,8 +17219,8 @@ function recSnap(full){
    *  这类字符长期是**自由字符（freeL）** ⇒ 它们的消失/瞬移/抓不动全都"无据可查"。
    *  这里补记自由字符：字符、坐标、状态、速度、以及赋予型参数（便于定位相关 bug）。 */
   var fls=[];
-  for(var q2=0;q2<freeL.length;q2++){
-    var L=freeL[q2];
+  for(var q2=0;q2<_fl.length;q2++){
+    var L=_fl[q2];
     if(!L||L.dead)continue;
     var lo={i:q2,ch:L.ch,st:L.state||null,
             x:+((L.wx||0)).toFixed(1),y:+((L.wy||0)).toFixed(1),

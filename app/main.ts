@@ -105,6 +105,10 @@ function installRecorderFacade(): void {
     gravity: () => null,
     toolDescriptor: () => null,
     toolContinuous: () => null,
+    // Collections must stay iterable even before the epilogue runs, so the
+    // recorder's loops can run unconditionally.
+    bodies: () => [],
+    freeLetters: () => [],
     bodyCount: () => 0,
     freeLetterCount: () => 0,
     matterBodyCount: () => null,

@@ -44,6 +44,20 @@ export interface RecorderFacade {
   gravity(): number | null;
   toolDescriptor(): string | null;
   toolContinuous(): boolean | null;
+  /**
+   * The live body array.
+   *
+   * Returned BY REFERENCE, not copied. The recorder iterates it, indexes into
+   * it (`bodies.indexOf(anchor.B)` to record anchor targets) and reads per-body
+   * fields — a copy would both lose identity comparisons and grow a 30-second
+   * recording's cost.
+   *
+   * Tolerates absence by returning an empty array so the recorder can iterate
+   * unconditionally; the callers no longer need their own guards.
+   */
+  bodies(): unknown[];
+  /** The live free-letter array, same contract as `bodies()`. */
+  freeLetters(): unknown[];
   bodyCount(): number;
   freeLetterCount(): number;
   matterBodyCount(): number | null;
@@ -76,6 +90,8 @@ export const RECORDER_FACADE_EPILOGUE = `
   F.toolContinuous = function(){
     try{ return (typeof TOOL!=='undefined') ? !!TOOL.cont : null; }catch(e){ return null; }
   };
+  F.bodies = function(){ try{ return bodies; }catch(e){ return []; } };
+  F.freeLetters = function(){ try{ return freeL; }catch(e){ return []; } };
   F.bodyCount = function(){ try{ return bodies.length; }catch(e){ return 0; } };
   F.freeLetterCount = function(){ try{ return freeL.length; }catch(e){ return 0; } };
   F.matterBodyCount = function(){
