@@ -41,6 +41,23 @@ export interface LegacyApp {
   formulas: unknown[];
   /** Device/tool mode state. */
   TOOL: { mode: string; shape?: string | null; cont?: boolean; stroke?: unknown; drag?: unknown };
+  /**
+   * The drag state machine.
+   *
+   * The most-referenced global in the project (568 references); the physics core
+   * reads it to know what the user is holding. Typed loosely here on purpose —
+   * `drag-facade.ts` owns the narrowing and the kind union.
+   */
+  grab: {
+    kind?: string | null;
+    obj?: unknown;
+    glx?: number;
+    gly?: number;
+    svx?: number;
+    svy?: number;
+    gx?: number;
+    gy?: number;
+  };
   /** Physics mode: 'high' (high school) or 'uni' (university). */
   PHYS_MODE: string;
   /** Global gravity, in px/s^2. */
@@ -173,6 +190,20 @@ export function physMode(): string {
 /** Current tool state; a neutral default before boot. */
 export function toolState(): LegacyApp['TOOL'] {
   return readRaw('TOOL') ?? { mode: 'pen' };
+}
+
+/**
+ * The live drag state.
+ *
+ * By reference, necessarily: `grab.kind` and `grab.obj` are reassigned by the
+ * pointer handlers on every press and release, so a copy would go stale within
+ * one frame. `drag-facade.ts` turns this into the narrow typed view the physics
+ * core uses.
+ *
+ * Returns undefined before boot.
+ */
+export function legacyGrabState(): LegacyApp['grab'] | undefined {
+  return readRaw('grab');
 }
 
 export function gravity(): number {

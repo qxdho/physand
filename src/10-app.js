@@ -14603,6 +14603,21 @@ function rodResolve(B){
 }
 function stepMatter(dt){
   if(!MW)return;
+  /* ★★2026-10（阶段 B）：拖拽状态经**拖拽门面**读取。
+   *  `grab` 是全项目引用最多的全局（568 处）。物理核心必须知道「用户正拿着什么」——
+   *  这个耦合是**真实的、去不掉的**：被拖的体要跟指针走，而不是跟求解器走。
+   *  但读取的**形状**可以改进：kind 是裸字符串，写错一个字符（'Body'）就永远比不成立，
+   *  拖拽**静默地**不再影响物理 —— 不报错也不崩。门面把 kind 收成联合类型，
+   *  并给出物理核心真正在问的三个问题：
+   *    · `_grabIsBody(b)`  这个体正被拖吗
+   *    · `_grabBody()`     正被拖的是哪个
+   *    · `_grabIsKind(k)`  拖的是不是这一类
+   *  ⚠ 门面缺失时回退到裸全局，保证单独 eval 本文件时也能工作。 */
+  var _gf=(typeof globalThis!=='undefined')?globalThis.__dragFacade:null;
+  var _grabIsBody=_gf?_gf.isDraggingBody:function(b){return !!(grab.kind==='body'&&grab.obj===b);};
+  var _grabBody=_gf?_gf.dragTarget:function(){return grab.obj;};
+  var _grabIsKind=_gf?_gf.isDraggingKind:function(k){return grab.kind===k;};
+  var _grabLocal=_gf?_gf.dragLocalOffset:function(){return {x:grab.glx||0,y:grab.gly||0};};
   var i,B,anyW=false;
   for(i=0;i<bodies.length;i++){
     B=bodies[i];
@@ -14645,10 +14660,11 @@ function stepMatter(dt){
   // 平衡角：质心垂在抓点正下方 = 本地偏移的世界方向朝正上，thEq = -π/2 - atan2(gly,glx)。
   // 用临界阻尼式逼近（不真模拟摆动，到位即停不过头），越远离质心抓（r 大）转得越干脆。
   // 抓点始终钉在指针上：转完用当前 th 反解质心位置（世界偏移 = R(th)·(glx,gly)）。
-  if(grab.kind==='body'&&grab.obj&&grab.obj.kind==='W'&&grab.obj.mb){
-    var G=grab.obj;
+  var _GB=_grabBody();
+  if(_grabIsBody(_GB)&&_GB.kind==='W'&&_GB.mb){
+    var G=_GB;
     var hw66=G.hw||30,hh66=G.hh||24,half66=Math.max(hw66,hh66);
-    var glx66=grab.glx||0,gly66=grab.gly||0;
+    var _gl=_grabLocal(),glx66=_gl.x,gly66=_gl.y;
     var c66=Math.cos(G.th||0),s66=Math.sin(G.th||0);
     var air66=(G.y+half66)<groundY-8;
     var lever66=Math.abs(glx66*c66-gly66*s66);
@@ -14712,8 +14728,9 @@ function stepMatter(dt){
     }
   }
   // R56：固定的边界正被旋转手柄拖动——角度由指针决定，Matter 只跟着转（静止体 setAngle 合法）
-  if(grab.kind==='rot'&&grab.obj&&grab.obj.kind==='W'&&grab.obj.mb){
-    var RB56=grab.obj;
+  var _GR=_grabBody();
+  if(_grabIsKind('rot')&&_GR&&_GR.kind==='W'&&_GR.mb){
+    var RB56=_GR;
     Matter.Body.setAngle(RB56.mb,RB56.th||0);
     Matter.Body.setAngularVelocity(RB56.mb,0);
     Matter.Sleeping.set(RB56.mb,false);
@@ -14771,19 +14788,19 @@ function stepMatter(dt){
       //   必须逐子步、且必须在求解**之后**：宿主是在子步里被重力带下去的，只在 pointermove
       //   里跟 = 指针停住就断（实测停顿 1.5s 残差 231px，见 rodDragPinHosts 注释）。
       //   只对「正被指针抓着的杆」调用 —— 其余时刻宿主位姿归 rodSyncAnchors，零开销。
-      if(grab.kind==='body'&&grab.obj&&grab.obj.kind==='T'&&!grab.obj.dead)
-        rodDragPinHosts(grab.obj);
+      if(_grabIsBody(_GB)&&_GB.kind==='T'&&!_GB.dead)
+        rodDragPinHosts(_GB);
       /* ★★R131-61：拖的是**物体**时，沿杆链把整条装配体一起解（否则多杆链会"分离"，
        *  见 rodDragPinChain 的注释与 _diag_r178 的 42~52px 残差）。 */
-      if(grab.kind==='body'&&grab.obj&&!grab.obj.dead)rodDragPinChain(grab.obj);
+      if(_grabIsBody(_GB)&&!_GB.dead)rodDragPinChain(_GB);
       // ★R106-2：S 族（弹簧/绳/铰链）同一个病、同一味药 —— 见 springDragPinRig 的注释。
       //   位置同样在**求解之后**（宿主是在子步里被重力带下去的），逐子步、只对正被抓着的体。
-      if(grab.kind==='body'&&grab.obj&&grab.obj.kind==='S'&&!grab.obj.dead)
-        springDragPinRig(grab.obj);
+      if(_grabIsBody(_GB)&&_GB.kind==='S'&&!_GB.dead)
+        springDragPinRig(_GB);
       // ★R106-3：**边中点磁吸**（用户：「拖到那个点周围时就有吸附过去的效果」）。
       //   放在两条「跟指针」之后：先把元件摆到指针下（上面两条），再做磁吸偏移 ——
       //   顺序反了会被 pin 覆盖掉，磁吸就白做。逐子步、纯位置投影、幂等。
-      if(grab.kind==='body'&&grab.obj&&!grab.obj.dead)midMagnetPullRig(grab.obj);
+      if(_grabIsBody(_GB)&&!_GB.dead)midMagnetPullRig(_GB);
       /* ★R131-5（已撤销，2026-09-25）：曾在测试「被抓 W 体逐子步重钉」（治帧级摆放与
        *   240Hz 子步之间重力攒速度 75.8px/s 的铁砧污染）。_probe_r104 E3 实测：开它之后
        *   铰链拖拽的另一端逐帧位移 5.6→82.3px（爆震），禁用即回 5.6px；而杆钟摆的真正
@@ -14819,7 +14836,7 @@ function stepMatter(dt){
     // 抓住、没吸过，就做一次与松手完全相同的判定（snapWToGround 内部自带「够近 + 够平 +
     // 仅开链」三重守卫，不满足就什么都不做）。
     // _snapped 防止每帧重吸把休眠彻底禁掉（snap 成功会显式唤醒体）；重新抓住 / 拖走就清零。
-    if(grab.kind==='body'&&grab.obj===B)B._snapped=false;
+    if(_grabIsBody(B))B._snapped=false;
     else if(!B.fixed&&!B._snapped&&!B.dead){
       var vs7=B.mb.velocity;
       if(vs7.x*vs7.x+vs7.y*vs7.y<0.25){          // <0.5px/子步（120px/s）≈ 已安定
@@ -14868,7 +14885,7 @@ function stepMatter(dt){
     //    加一条 excursion ≤ 1.6px ⇒ 整个窗口内它**从没走远过**，才是真静置。
     //    阈值刻意复用同一个 1.6px 尺度：静置多段体的求解器跳变实测 ~1.2px（见上面③），
     //    落在门内；弹跳体的 excursion 是 20px 量级，差一个数量级，不靠新魔数分辨。
-    if(!B.mb.isStatic&&!(grab.kind==='body'&&grab.obj===B)){
+    if(!B.mb.isStatic&&!_grabIsBody(B)){
       if(!B._snap)B._snap={x:B.x,y:B.y,th:B.th,n:0,ex:0};
       if(B._snap.ex===undefined)B._snap.ex=0;
       var exd=Math.abs(B.x-B._snap.x)+Math.abs(B.y-B._snap.y)+Math.abs(B.th-B._snap.th)*60;
@@ -14881,7 +14898,7 @@ function stepMatter(dt){
     }else if(B._snap)B._snap.n=0;
     // 圆形是真实刚体：滚动角速度回传（松开时带着转）；形状/线保持 0 即可
     if(B.wshape==='circle'&&B.rad){B.om=B.mb.angularVelocity;}
-    if(grab.kind==='body'&&grab.obj===B){B.vx=0;B.vy=0;B.rvx=0;B.rvy=0;B._px=B.x;B._py=B.y;}
+    if(_grabIsBody(B)){B.vx=0;B.vy=0;B.rvx=0;B.rvy=0;B._px=B.x;B._py=B.y;}
   }
   // ★R130d：W 体回写**之后**把双端锚定的杆再摆一次姿态。杆位姿在子步内摆（Engine.update
   //   之前，rodIntegrate→rodSyncAnchors），W 体在子步里还会被 Matter 积分 ⇒ 杆姿态恒滞后
@@ -14892,7 +14909,9 @@ function stepMatter(dt){
     for(var rq=0;rq<RODS.length;rq++){
       var RQ=RODS[rq];
       if(!RQ||RQ.dead||!RQ.anc||!RQ.anc[0]||!RQ.anc[1])continue;
-      if(grab&&grab.obj===RQ&&(grab.kind==='body'||grab.kind==='rodlen'))continue;
+      /* ⚠ 两种拖拽都要跳过：移动杆本体（'body'）**以及**拖长度手柄（'rodlen'）。
+         只判 'body' 会让拖手柄时杆的弹簧约束继续拉扯 —— 表现为手柄拖不动。 */
+      if(_grabBody()===RQ&&(_grabIsKind('body')||_grabIsKind('rodlen')))continue;
       if(RQ.anc[0].B&&!RQ.anc[0].B.dead&&RQ.anc[1].B&&!RQ.anc[1].B.dead&&
          bodies.indexOf(RQ.anc[0].B)>=0&&bodies.indexOf(RQ.anc[1].B)>=0){
         var q0=springAnchoredWorld(RQ,0),q1=springAnchoredWorld(RQ,1);
