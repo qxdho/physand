@@ -1,0 +1,223 @@
+/**
+ * Tests for the body collection.
+ *
+ * The survey that produced this module found the properties that make body
+ * handling tractable: one creation point, thirteen removal sites, no
+ * reassignment, and four mutate-while-iterating functions that were each
+ * checked and found safe.
+ *
+ * These tests pin the OPERATIONS and the safety rules. The identity-removal rule
+ * in particular is load-bearing: a body can be removed from inside a loop or a
+ * collision callback, and an index captured earlier may by then refer to a
+ * different body.
+ *
+ * Run: node --test app/physics/
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  BODY_LIST_KEY,
+  BodyList,
+  installBodyListBridge,
+  type LegacyBody,
+  type RemovalReason,
+} from './body-list.ts';
+
+const body = (x = 0, y = 0): LegacyBody => ({ x, y });
+
+test('add appends and returns the body', () => {
+  const list = new BodyList();
+  const b = body();
+  assert.equal(list.add(b), b, 'returns the body so callers keep their shape');
+  assert.equal(list.length, 1);
+  assert.equal(list.at(0), b);
+});
+
+test('indexOf and has use IDENTITY, not structural equality', () => {
+  /* Two bodies can legitimately have identical fields — a spawned pair, or a
+   * shattered fragment. Comparing by value would target the wrong one, so the
+   * collection must be identity-addressed.
+   */
+  const list = new BodyList();
+  const a = body(10, 20);
+  const twin = body(10, 20); // structurally identical, different object
+  list.add(a);
+
+  assert.equal(list.indexOf(a), 0);
+  assert.equal(list.indexOf(twin), -1, 'a lookalike must NOT be found');
+  assert.equal(list.has(a), true);
+  assert.equal(list.has(twin), false);
+});
+
+test('remove is by identity and reports whether anything happened', () => {
+  const list = new BodyList();
+  const a = body(), twin = body();
+  list.add(a);
+
+  assert.equal(list.remove(twin), false, 'a lookalike removes nothing');
+  assert.equal(list.length, 1, 'and leaves the list untouched');
+
+  assert.equal(list.remove(a), true);
+  assert.equal(list.length, 0);
+});
+
+test('removing twice is tolerated, not an error', () => {
+  /* Teardown paths run more than once — clear-all followed by an expiry tick,
+   * for example. Throwing here would take down the page during a delete.
+   */
+  const list = new BodyList();
+  const a = body();
+  list.add(a);
+  assert.equal(list.remove(a), true);
+  assert.equal(list.remove(a), false, 'second removal is a no-op');
+  assert.equal(list.length, 0);
+});
+
+test('removeAt removes the right body from a backwards walk', () => {
+  /* Five legacy sites count down and already know the index. The collection
+   * must support that without those sites hand-rolling a splice.
+   */
+  const list = new BodyList();
+  const bs = [body(1), body(2), body(3), body(4)];
+  for (const b of bs) list.add(b);
+
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list.at(i)!.x % 2 === 0) list.removeAt(i);
+  }
+  assert.deepEqual(list.copy().map((b) => b.x), [1, 3], 'evens removed, odds kept');
+});
+
+test('removeAt ignores out-of-range indices', () => {
+  const list = new BodyList();
+  list.add(body());
+  assert.equal(list.removeAt(-1), undefined);
+  assert.equal(list.removeAt(5), undefined);
+  assert.equal(list.length, 1, 'nothing was removed');
+});
+
+test('remove notifies listeners with a reason', () => {
+  const list = new BodyList();
+  const seen: { b: LegacyBody; why: RemovalReason }[] = [];
+  list.onRemove((b, why) => seen.push({ b, why }));
+
+  const a = body();
+  list.add(a);
+  list.remove(a, 'consumed');
+  assert.deepEqual(seen, [{ b: a, why: 'consumed' }]);
+});
+
+test('a throwing listener does not prevent the removal', () => {
+  /* Listeners are where future invariants go (e.g. disposing the Matter
+   * mirror). A bug in one must not leave a body stuck in the list.
+   */
+  const list = new BodyList();
+  list.onRemove(() => {
+    throw new Error('listener blew up');
+  });
+  const a = body();
+  list.add(a);
+  assert.equal(list.remove(a), true, 'removal completed anyway');
+  assert.equal(list.length, 0);
+});
+
+test('the collection is iterable and array-like', () => {
+  // ~372 legacy read sites index into `bodies` directly; the shape must survive.
+  const list = new BodyList();
+  const bs = [body(1), body(2), body(3)];
+  for (const b of bs) list.add(b);
+
+  assert.deepEqual([...list].map((b) => b.x), [1, 2, 3]);
+  for (let i = 0; i < list.length; i++) assert.equal(list.at(i), bs[i]);
+  assert.equal(list.get(1), bs[1], 'indexed accessor');
+  assert.equal(list.snapshot().length, 3);
+});
+
+test('copy is a snapshot, so later mutation does not affect it', () => {
+  // Guards against a test iterating a live list while the code under test
+  // removes from it.
+  const list = new BodyList();
+  const a = body(1);
+  list.add(a);
+  const snap = list.copy();
+  list.remove(a);
+  assert.equal(snap.length, 1, 'snapshot is unaffected');
+  assert.equal(list.length, 0);
+});
+
+/* --------------------------------------------------------------------------
+ * The bridge over the live legacy array
+ * ------------------------------------------------------------------------ */
+
+/** Build a bridge over a fake legacy array and return both. */
+function bridge(initial: LegacyBody[]) {
+  const arr = initial.slice();
+  installBodyListBridge(() => arr);
+  const g = globalThis as Record<string, unknown>;
+  return { arr, bridge: g[BODY_LIST_KEY] as ReturnType<typeof readBridge> };
+}
+function readBridge(): { add(b: LegacyBody): LegacyBody; indexOf(b: unknown): number; remove(b: unknown): boolean; removeAt(i: number): void } {
+  return (globalThis as Record<string, unknown>)[BODY_LIST_KEY] as never;
+}
+
+test('the bridge mutates the SAME array the legacy code holds', () => {
+  /* This is the property the whole approach rests on. Roughly 372 read sites are
+   * written as `bodies[i]`, and functions pass the array around by value.
+   * Replacing it with a different object would break all of them at once.
+   */
+  const { arr, bridge: b } = bridge([]);
+  const first = body(1);
+  const returned = b.add(first);
+
+  assert.equal(returned, first, 'add returns the body');
+  assert.equal(arr.length, 1, 'the ORIGINAL array grew');
+  assert.equal(arr[0], first);
+});
+
+test('the bridge removes by identity from the live array', () => {
+  const a = body(1), keep = body(2);
+  const { arr, bridge: b } = bridge([a, keep]);
+
+  assert.equal(b.remove(a), true);
+  assert.deepEqual(arr, [keep], 'only the target left');
+});
+
+test('the bridge tolerates a missing array', () => {
+  // Before boot the global does not exist; these must not throw.
+  const g = globalThis as Record<string, unknown>;
+  const saved = g[BODY_LIST_KEY];
+  installBodyListBridge(() => undefined);
+  const b = readBridge();
+  try {
+    assert.equal(b.indexOf(body()), -1);
+    assert.equal(b.remove(body()), false);
+    b.removeAt(0); // must not throw
+    assert.equal(b.add(body()).x, 0, 'add still returns the body');
+  } finally {
+    if (saved === undefined) delete g[BODY_LIST_KEY];
+    else g[BODY_LIST_KEY] = saved;
+  }
+});
+
+test('the bridge resolves the array lazily, not at install time', () => {
+  /* Install happens before the legacy source runs, so the array does not exist
+   * yet. Capturing it eagerly would give a permanent no-op.
+   */
+  let arr: LegacyBody[] | undefined;
+  installBodyListBridge(() => arr);
+
+  const g = globalThis as Record<string, unknown>;
+  const b = g[BODY_LIST_KEY] as { add(x: LegacyBody): LegacyBody; indexOf(x: unknown): number };
+
+  // Before the array exists: nothing to add to.
+  const early = body(1);
+  b.add(early);
+  assert.equal(b.indexOf(early), -1);
+
+  // Now the legacy code creates it.
+  arr = [];
+  const late = body(2);
+  b.add(late);
+  assert.equal(arr.length, 1, 'writes reach the array created later');
+  assert.equal(b.indexOf(late), 0);
+});

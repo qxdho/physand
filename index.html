@@ -1283,6 +1283,12 @@ function BODY(x,y){
     er:null,   // E field: asymmetric 4-edge half-extents {l,r,t,b} — each edge drags independently
     bh:null,   // black-hole state {stage:0 growing/1 alive, r, R, t, age, spin, seed}
     st:{open:null,close:null,plus:null,sq:null,slash:null}};
+  /* ★★2026-10（阶段 C / `physics` 边界）：**全项目唯一的创建点**，改为经 `bodies.add()`。
+   *  勘定结果：1 个创建点、13 个移除点、0 次重新赋值 —— 「一扇门进、十三扇门出、全靠身份」
+   *  这个不对称正是「拥有式集合」有真实价值的原因：有了唯一入口，不变量才有唯一挂载点。
+   *  ⚠ 门面缺失时回退到裸 push（单独 eval 本文件时）。 */
+  var _BL=(typeof globalThis!=='undefined')?globalThis.__bodyList:null;
+  if(_BL){_BL.add(B);return B;}
   bodies.push(B);
   return B;
 }

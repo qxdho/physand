@@ -41,6 +41,7 @@ import { installMatterBridge } from './core/matter-bridge';
 import { installFormulaFacade } from './core/formula-facade';
 import { installDragFacade } from './core/drag-facade';
 import { installViewportFacade } from './core/viewport';
+import { installBodyListBridge, type LegacyBody } from './physics/body-list';
 import { drawParticles } from './render/particles';
 import { drawBlackHole, drawHinge, drawRope, drawSnapMarker } from './render/devices';
 import { boxExtentAlong, drawFieldDots, drawRodPlank } from './render/field';
@@ -175,6 +176,12 @@ function boot(): void {
   installFormulaFacade();
   installDragFacade();
   installViewportFacade();
+  // Phase C: the body collection. The bridge operates on the SAME array the
+  // legacy code holds, because ~372 read sites index into it directly.
+  installBodyListBridge(() => {
+    const arr = (globalThis as unknown as Record<string, unknown>).bodies;
+    return Array.isArray(arr) ? (arr as LegacyBody[]) : undefined;
+  });
   // Phase C: extracted renderers. Published so the legacy draw path can call
   // them while the remaining call sites migrate in groups.
   (globalThis as unknown as Record<string, unknown>).__renderModules = {
