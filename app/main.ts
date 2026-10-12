@@ -29,6 +29,14 @@ import bossSource from '../src/90-boss.js?raw';
 import { LEGACY_GLOBAL_NAMES } from './core/legacy-globals.generated';
 import { evaluateAsClassicScript, assertGlobalsPresent } from './core/module-bridge';
 import { world } from './core/world';
+import { params } from './core/param-registry';
+import { bridgeParamDefs } from './core/panel-bridge';
+import { PANEL_HOOK_EPILOGUE, PARAM_HOOKS_KEY } from './core/panel-hooks';
+
+// Side-effect import: this module performs the `params.register(...)` calls.
+// Without it the registry is EMPTY at boot, the hook claims no ids, and the
+// panel silently keeps its legacy behaviour — with no error anywhere.
+import './params/w-body';
 
 /**
  * Inject the static markup. The legacy page was a flat list of <div>s directly
@@ -93,6 +101,38 @@ function attachWorldReadFacade(): void {
   } as never);
 }
 
+/**
+ * Publish the registry hook object that the in-scope epilogue reads.
+ *
+ * Must run before the legacy source is evaluated. Everything here is defensive:
+ * if the registry is empty the hook simply never claims an id, and the panel
+ * behaves exactly as it did before the migration.
+ */
+function installParamHooks(): void {
+  /* Fail loudly if the registry is empty. This exact situation happened during
+   * development: `app/params/w-body.ts` performs the registrations as an import
+   * side effect, and dropping that import left the registry empty. Nothing
+   * errored — the hook simply claimed no ids, so the panel quietly reverted to
+   * legacy behaviour and the "size is adjustable" fix looked like it had never
+   * been written. A silent no-op is the worst possible failure here. */
+  if (params.all().length === 0) {
+    throw new Error(
+      'physand: parameter registry is empty at boot. ' +
+        'A module that calls params.register(...) is not being imported — ' +
+        'check the side-effect import of app/params/w-body.ts in main.ts.',
+    );
+  }
+
+  const hook = {
+    has: (id: string) => params.has(id),
+    forBodyIds: (b: unknown) => params.forBody(b as never).map((s) => s.id),
+    read: (id: string, b: unknown) => params.read(id, b as never),
+    write: (id: string, b: unknown, value: number) => params.write(id, b as never, value),
+    defaultOf: (id: string) => (params.has(id) ? params.get(id).def : undefined),
+  };
+  (globalThis as unknown as Record<string, unknown>)[PARAM_HOOKS_KEY] = hook;
+}
+
 function boot(): void {
   installStaticDom();
 
@@ -107,9 +147,13 @@ function boot(): void {
   // Declared names list is empty: the bundle installs `Matter` itself.
   evaluateAsClassicScript(matterSource, []);
 
-  // Stage 3: the application. Evaluated as a classic script so every top-level
-  // declaration becomes a global, exactly as in the single-file build.
-  evaluateAsClassicScript(appSource, LEGACY_GLOBAL_NAMES);
+  // Stage 3: the application.
+  //
+  // The registry hook must be installed BEFORE this runs, because the epilogue
+  // executes inside the same scope and reads it. See app/core/panel-hooks.ts for
+  // why the hook cannot be applied afterwards by patching globals.
+  installParamHooks();
+  evaluateAsClassicScript(appSource, LEGACY_GLOBAL_NAMES, PANEL_HOOK_EPILOGUE);
 
   // Stage 4: the boss animation IIFE, which calls back into the app globals.
   evaluateAsClassicScript(bossSource, []);
@@ -120,8 +164,13 @@ function boot(): void {
   // Stage 5: wire the typed read facade onto the now-live globals.
   attachWorldReadFacade();
 
+  // Stage 6: give the legacy PARAM_DEFS table any registry-only parameters, so
+  // a new knob still renders a labelled row in the panel.
+  bridgeParamDefs();
+
   // Expose for the replay harness and for phase-B verification.
   (globalThis as unknown as Record<string, unknown>).__world = world;
+  (globalThis as unknown as Record<string, unknown>).__params = params;
 }
 
 boot();

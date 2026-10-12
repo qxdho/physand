@@ -4822,9 +4822,75 @@ function layoutField(B){
     B.sc=1;B.frac=false;B.subBar=null;
     return;
   }
+  /* ★★2026-10（重构时发现，修的是**一直存在的崩溃**）：
+   *  一个**画出来的 W 体在没吸收任何字母时 `B.fg===null`**（它没有"主字形"），
+   *  但这里无条件执行 `B.glyphs=[B.fg]` 与 `B.fg.body=...` ⇒ **空引用崩溃**
+   *  （TypeError: Cannot set properties of null (setting 'body')）。
+   *
+   *  为什么以前没暴露：能走到这里的路径都恰好绕开了 —— 改尺寸 `scale` 只在物体挂了
+   *  `r` 字母时才出现在参数面板里（`paramDef` 第 8800 行），而有 `r` 就有 `fg`。
+   *  于是"必须挂 r 才能调尺寸"这个**看起来是设计选择的限制，其实是被这个崩溃逼出来的**
+   *  —— 一旦让无字母的形状也能调尺寸，`refresh()` 立刻崩。（实测：传统单文件构建上
+   *  `refresh(<刚画的方块>)` 同样抛错，与本次重构无关。）
+   *
+   *  修法：无 `fg` ⇒ 只清字形相关状态，**几何保持原样**。
+   *  ⚠ 这里**不能**调 `layoutBody(B)`：那是给"公式体"排版的，它会把 hw/hh 重置成 26，
+   *  而画出来的形状尺寸来自 `B.pts`/`B.hull`（见 rebuildWBody/bndHullLocal），
+   *  调它反而会把刚画的方块缩成一个 26×26 的小盒。形状几何由各自的建体重建路径负责，
+   *  本函数只管字形布局。有 `fg` 时**逐字保持原逻辑**，所以既有行为不受影响。 */
+  if(!B.fg){
+    B.glyphs=[];
+    B.sc=1;B.frac=false;B.subBar=null;
+    applyInkScale(B);
+    return;
+  }
   B.glyphs=[B.fg];
   B.fg.body=B;B.fg.inBody=true;B.fg.sx=0;B.fg.sy=0;
   B.hw=(B.fg.m.w/2)+8;B.hh=(B.fg.m.bot-B.fg.m.top)/2+4;B.sc=1;B.frac=false;B.subBar=null;
+}
+
+/* ★★2026-10：**画出形状的尺寸缩放**（用户：「放置的物块什么的没法调大小」）。
+ *
+ * 为什么需要单独一条路：`refresh()` 对 `B.kind` 有值的体在 `layoutField` 就早退了，
+ * 而 `scaleParam` 的应用点在**公式体**那条分支里（约 5449 行，`if(B.kind)` 之后）。
+ * ⇒ 画出来的 W 体**永远走不到那段缩放代码**，`B.scaleParam` 写了也没有任何效果。
+ *
+ * 几何的真源：画出来的形状尺寸来自 `B.pts`（墨迹顶点），碰撞体 `B.hull` 是它的缓存
+ * （见 bndHullLocal：`if(B.hull)return B.hull;`）。所以缩放必须
+ *   ① 缩放 pts ② **作废 hull 缓存**（否则永远是旧的）③ 重建 Matter 体。
+ * 这正是 setGroundEnds/setRodEnds 注释里反复强调的那条纪律：「改几何必须连带作废 hull」。
+ *
+ * `_inkBase` 记录**未缩放的原始顶点**，每次按 base×scaleParam 重算，
+ * 这样反复拖动滑条不会累积放大（与公式体那条注释同一个理由）。
+ */
+function applyInkScale(B){
+  var sp=(B.scaleParam!=null)?B.scaleParam:1;
+  if(!(sp>0))sp=1;
+  if(sp===1&&!B._inkBase)return;              // 没缩过、也没缩放过 ⇒ 无事可做
+  if(!B.pts||!B.pts.length)return;
+  if(!B._inkBase){
+    /* 第一次缩放：把当前顶点存成基准（深拷贝，且此后不再改动，
+       避免把"已经缩放过的"误当成基准而指数放大）。圆形另存基准半径。 */
+    B._inkBase=[];
+    for(var i=0;i<B.pts.length;i++)B._inkBase.push([B.pts[i][0],B.pts[i][1]]);
+    if(B.rad!=null&&B.radB==null)B.radB=B.rad;
+  }
+  var sc=(sp===1)?null:sp;
+  B.pts=[];
+  for(var j=0;j<B._inkBase.length;j++){
+    B.pts.push(sc?[B._inkBase[j][0]*sc,B._inkBase[j][1]*sc]:[B._inkBase[j][0],B._inkBase[j][1]]);
+  }
+  /* ② 重算 hw/hh 并重建碰撞体。hull 必须作废 —— 它是 pts 的缓存。 */
+  var mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  for(var k=0;k<B.pts.length;k++){
+    var q=B.pts[k];
+    if(q[0]<mnx)mnx=q[0];if(q[0]>mxx)mxx=q[0];
+    if(q[1]<mny)mny=q[1];if(q[1]>mxy)mxy=q[1];
+  }
+  B.hw=Math.max(6,(mxx-mnx)/2);B.hh=Math.max(6,(mxy-mny)/2);
+  B.hull=null;
+  if(B.rad!=null)B.rad=(B.radB||B.rad)*sp;
+  if(typeof rebuildWBody==='function')rebuildWBody(B,B.th||0);
 }
 // R60c（用户 #5）：「进圆轨道」的规格是**完整的 mv²/r**，不是「只要有 v² / r」。
 // 旧判据 `hasV && hasR && vCount>=2` 只看了 mem（v,v,r），**完全没看质量字母** —— 于是把 m

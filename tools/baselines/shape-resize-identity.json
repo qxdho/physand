@@ -1,0 +1,105 @@
+{
+ "id": "shape-resize-identity",
+ "doc": "Resizing to 2x then back to 1x must restore the exact original geometry. Catches cumulative-growth bugs in the scale path (the \"gets bigger every time\" class).",
+ "snaps": [
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 1200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 497.708,
+     "vx": 0,
+     "vy": 1300,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 1200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 587.355,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 1200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 587.355,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": 5.473
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

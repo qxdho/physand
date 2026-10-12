@@ -12,12 +12,12 @@
 
 项目正处于**从「手工拼接的单文件」到「现代 Web 应用」的渐进式迁移**中。
 
-**两套构建目前并存，且都通过全部 9 条回归测试：**
+**两套构建目前并存，且都通过全部 11 条回归测试：**
 
 | 目标 | 命令 | 产物 | 状态 |
 |---|---|---|---|
-| 传统单文件 | `npm run legacy:build` | `index.html` | ✅ 9/9 通过 |
-| 新架构 | `npm run build` | `dist/` | ✅ 9/9 通过 |
+| 传统单文件 | `npm run legacy:build` | `index.html` | ✅ 11/11 通过 |
+| 新架构 | `npm run build` | `dist/` | ✅ 11/11 通过 |
 
 **同一个测试套件、同一批基线**跑在这两个目标上 —— 这就是「重构没有改变行为」的证明。
 
@@ -108,14 +108,42 @@ npm run gen:check   # 校验是否最新（CI 会跑；过期即失败）
 换成 ES module 后，`var bodies` 变成**模块私有**，`globalThis.bodies === undefined`
 （已实测确认）。
 
-这会让三样东西同时失效：回归测试驱动、`90-boss.js` 的回调、页内录制器。
-它们全都依赖裸全局：`typeof bodies !== "undefined"`、`makeGround(...)`、`stepPhysics(...)`。
-
 对策是 `app/core/module-bridge.ts`：把遗留源码当经典脚本求值，并显式把顶层声明
-重新发布到 `globalThis`。这是**行为等价**的（同样的名字回到同样的地方），
-因此回归基线继续有效。
+重新发布到 `globalThis`。
 
-**这个桥是临时的。** 阶段 C 会把子系统逐个换成真正的 `import`，桥随之缩小直到删除。
+#### ⚠️ 发布必须是**活的访问器**，不能是一次性快照
+
+`new Function` 给源码的是**函数作用域**，所以它的 `var x` 是包装函数里的**局部绑定**。
+因此「求值完把值拷到 `globalThis`」这种写法会发布一份**快照**，并有两种截然不同的后果：
+
+| 类型 | 后果 |
+|---|---|
+| 对象 / 数组（如 `bodies`） | **看起来正常** —— 快照持有同一引用，应用在原地改 |
+| 标量（如 `paramBody`、`W`） | **静默过期** —— 应用内部重新赋值后，全局那份不再更新 |
+
+第二种是实际踩到的坑：`openParams()` 设置好内部的 `paramBody`，但 `window.paramBody`
+仍然读到 `null`；而传统单文件构建（那里 `var` 真的是全局）报告的是新值。
+**任何通过全局面读取状态的消费者都会被悄悄骗过**，包括回放测试。
+
+现在改为发布访问器（getter/setter），全局名恒定绑定到活的局部变量，
+完整复现经典脚本语义。`app/core/module-bridge.test.ts` 有 7 条测试锁住这些性质，
+其中「标量保持同步」那条经实测确认能抓住快照版本的实现。
+
+#### 内部函数必须**在作用域内**挂钩，不能事后打补丁
+
+同样的原因：`openParams` 调用的是**闭包里的** `paramDef` 绑定，不是 `window.paramDef`。
+实测证据（把全局换成必定返回非空的桩函数）：
+
+```js
+window.paramDef = () => ['wmass'];
+openParams(square);          // 仍然早退，面板毫无变化
+```
+
+所以参数注册表的挂钩（`app/core/panel-hooks.ts`）是以 **epilogue 源码**的形式
+注入到同一个作用域内执行的，那里重新赋值局部绑定才是内部调用者真正看到的东西。
+
+> **这两条合起来是本项目最容易踩的架构陷阱**：改 `main.ts` 或模块桥时务必先读本节。
+
 
 ### 3.3 启动顺序是承载语义的
 
@@ -140,16 +168,20 @@ ES module 的 `import` 会**提升**并在模块体之前求值，所以不能�
 
 ### 4.1 回归测试（安全网）
 
-9 条场景覆盖物理核心：
+11 条场景覆盖物理核心：
 
 ```
 empty-steady  shape-freefall  shape-rest-on-ground  two-shapes-stack  circle-roll
 rod-static-anchors  belt-static  rod-anchored-swing  spring-hanging-mass
+shape-resize-scaled  shape-resize-identity
 ```
 
+另有 **31 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
+
 ```bash
-npm test          # 跑传统单文件构建
-npm run test:app  # 跑新 Vite 构建（需先起 npm run preview）
+npm run test:unit # 新模块单测（最快，先跑）
+npm test          # 回归：传统单文件构建
+npm run test:app  # 回归：新 Vite 构建（需先起 npm run preview）
 npm run test:both # 两个都跑
 ```
 

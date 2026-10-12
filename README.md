@@ -104,7 +104,7 @@ npm run test:both    # 回归必须全绿
 
 ### 回归测试
 
-9 条场景覆盖物理核心。**任何改动都不能让它们变红**：
+11 条场景覆盖物理核心。**任何改动都不能让它们变红**：
 
 ```
 empty-steady           启动/全局初始化：不该有东西自己出现或移动
@@ -116,7 +116,11 @@ rod-static-anchors     无锚定的杆不得漂移
 belt-static            传送带必须保持静止
 rod-anchored-swing     一端锚定的杆摆动且长度守恒 ★
 spring-hanging-mass    弹簧悬挂质量振荡至平衡 ★
+shape-resize-scaled    改尺寸后碰撞体真的变大 ★
+shape-resize-identity  放大再还原必须精确回到原尺寸（防累积放大）★
 ```
+
+★ = 2026-10 新增。另有 31 条单元测试覆盖新模块，跑 `npm run test:unit`。
 
 ★ = 2026-10 新增。它们补上了一个**严重盲区**：此前在 `rodSyncAnchors`
 （全项目最大的函数）开头注入 `if(1)return false;`，测试**依然 7/7 全绿** ——

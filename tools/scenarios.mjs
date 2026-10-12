@@ -159,4 +159,66 @@ export const SCENARIOS = [
     },
     steps: [{ n: 60 }, { n: 60 }, { n: 120 }],
   },
+
+  /* ------------------------------------------------------------------------
+   * RESIZE A DRAWN SHAPE
+   *
+   * WHY THIS EXISTS
+   * ---------------
+   * "I can't make a placed block bigger" turned out to be two separate bugs,
+   * both invisible to the previous 9 scenarios:
+   *
+   *   1. The size knob was only offered when the body carried an `r` glyph, so a
+   *      shape you just drew had no size row. (Panel-level; covered by unit
+   *      tests in app/params/w-body.test.ts.)
+   *
+   *   2. `refresh()` CRASHED on any drawn shape with no glyph — `B.fg` is null,
+   *      and `layoutField` unconditionally did `B.glyphs=[B.fg]` plus
+   *      `B.fg.body=...`. Verified to throw on the legacy build too, so this
+   *      was a long-standing latent crash, not a regression. It went unnoticed
+   *      precisely BECAUSE of bug 1: only `r`-carrying bodies could be resized,
+   *      and those always have an `fg`.
+   *
+   *   3. Even once it stopped crashing, resizing did nothing: the `scaleParam`
+   *      application lives in the formula-body branch of `refresh()`, and drawn
+   *      `W` bodies return early from `layoutField`. So the geometry was never
+   *      actually scaled.
+   *
+   * This scenario pins the observable outcome: resizing must change the physics,
+   * must be proportional (not cumulative), and must return to the original state.
+   * ------------------------------------------------------------------------ */
+
+  {
+    id: 'shape-resize-scaled',
+    doc: 'A drawn square resized to 2x falls and rests; the collider must actually grow. ' +
+         'Covers applyInkScale + the null-`fg` crash in layoutField.',
+    setup: () => {
+      makeGround(640, 700, 1200);
+      const sq = mkBoundary(
+        [[380, 140], [460, 140], [460, 200], [380, 200]],
+        { shape: 'poly', closed: true },
+      );
+      // 2x via the same entry point the panel uses.
+      applyParam(sq, PARAM_DEFS['scale'], 2);
+      return true;
+    },
+    steps: [{ n: 30 }, { n: 90 }, { n: 120 }],
+  },
+
+  {
+    id: 'shape-resize-identity',
+    doc: 'Resizing to 2x then back to 1x must restore the exact original geometry. ' +
+         'Catches cumulative-growth bugs in the scale path (the "gets bigger every time" class).',
+    setup: () => {
+      makeGround(640, 700, 1200);
+      const sq = mkBoundary(
+        [[380, 140], [460, 140], [460, 200], [380, 200]],
+        { shape: 'poly', closed: true },
+      );
+      applyParam(sq, PARAM_DEFS['scale'], 2);
+      applyParam(sq, PARAM_DEFS['scale'], 1);   // must return to the original box
+      return true;
+    },
+    steps: [{ n: 30 }, { n: 90 }, { n: 120 }],
+  },
 ];

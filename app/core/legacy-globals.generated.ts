@@ -284,6 +284,7 @@ export const LEGACY_GLOBAL_NAMES = [
   'appendPairRow',
   'applyEffRest',
   'applyGivenAccel',
+  'applyInkScale',
   'applyKXCombo',
   'applyParam',
   'applyTCombo',
@@ -953,4 +954,4 @@ export const LEGACY_GLOBAL_NAMES = [
 ] as const;
 
 /** Count of declarations, for diagnostics and the sanity check in tests. */
-export const LEGACY_GLOBAL_COUNT = 938;
+export const LEGACY_GLOBAL_COUNT = 939;

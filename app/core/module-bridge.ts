@@ -52,17 +52,58 @@ const REQUIRED_GLOBALS = [
  * declared names out. The wrapper body is NOT strict-mode, so `var` semantics
  * and function hoisting inside the source are unchanged.
  */
+/**
+ * Evaluate `source` so that its top-level `var`/`function` declarations become
+ * properties of `globalThis`, and append `epilogue` inside the SAME scope.
+ *
+ * WHY THE EPILOGUE IS INSIDE THE SCOPE (important)
+ * ------------------------------------------------
+ * Patching `globalThis.paramDef` after evaluation does NOT affect the app's
+ * internal callers. The legacy source is evaluated as one function body, so its
+ * functions close over the *function-scoped* `paramDef` binding — `openParams`
+ * calls that binding, not the global. Verified experimentally: replacing
+ * `window.paramDef` with a stub that always returns `['wmass']` changed nothing,
+ * while the panel still rendered the stale rows.
+ *
+ * Therefore anything that needs to hook an internal function must do so from
+ * inside this scope, where reassigning the local binding is what the other
+ * functions actually see. The epilogue runs after all declarations are hoisted
+ * and initialised, so it can safely wrap them.
+ */
 export function evaluateAsClassicScript(
   source: string,
   declaredNames: readonly string[],
+  epilogue?: string,
 ): void {
+  /* Publish as LIVE ACCESSORS, not as a one-time value copy.
+   *
+   * `new Function` gives the source FUNCTION scope, so its `var x` is not a
+   * global — it is a local binding inside the wrapper. Copying values once
+   * (`globalThis[n] = n`) therefore publishes a SNAPSHOT:
+   *
+   *   - objects/arrays happen to stay correct, because the copy holds the same
+   *     reference and the app mutates in place;
+   *   - SCALARS go stale the moment the app reassigns them. Verified:
+   *     `openParams()` sets the internal `paramBody`, but `window.paramBody`
+   *     still read `null` afterwards — while the legacy single-file build
+   *     (where `var` really was global) correctly reported the new body.
+   *
+   * That silently breaks anything reading state through the global surface,
+   * including the replay harness. Defining accessors instead keeps the published
+   * name permanently bound to the live local variable, which reproduces the
+   * original classic-script semantics exactly.
+   */
   const publish = declaredNames
-    .map((n) => `try{globalThis[${JSON.stringify(n)}]=${n};}catch(e){}`)
+    .map(
+      (n) =>
+        `try{Object.defineProperty(globalThis,${JSON.stringify(n)},` +
+        `{get:function(){return ${n};},set:function(v){${n}=v;},configurable:true});}catch(e){}`,
+    )
     .join('\n');
 
   // `new Function` produces a sloppy-mode function body, matching the original
   // classic-script environment (sloppy mode, function-scoped var).
-  const run = new Function(`${source}\n;${publish}\n`);
+  const run = new Function(`${source}\n;${publish}\n;${epilogue ?? ''}\n`);
   run();
 }
 
