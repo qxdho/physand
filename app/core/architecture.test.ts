@@ -292,3 +292,62 @@ test('module code reads canvas geometry through the viewport module, not globals
       `core/viewport.ts:\n${offenders.join('\n')}`,
   );
 });
+
+test('extracted renderers take their context as a parameter', () => {
+  /* WHY THIS EXISTS (phase C, "pluggable rendering")
+   * The boundary survey found 476 of 555 legacy functions in one component.
+   * Drilling in found 17 draw functions that read the canvas context and write
+   * no shared state — genuinely extractable, unlike the rest.
+   *
+   * The extraction only has value if the moved functions stop closing over
+   * globals: a renderer that still reads `cvx` from scope can only ever be moved
+   * together with everything else that reads it, which is how the original file
+   * became one component. So extracted renderers must RECEIVE the surface.
+   */
+  const renderDir = join(APP, 'render');
+  const files = readdirSync(renderDir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'));
+  assert.ok(files.length > 0, 'there must be at least one extracted renderer');
+
+  const offenders: string[] = [];
+  for (const f of files) {
+    const rel = `render/${f}`;
+    if (rel === 'render/surface.ts') continue; // the module that OWNS the lookup
+    const code = stripCommentsAndStrings(readFileSync(join(renderDir, f), 'utf8'));
+    for (const line of code.split('\n')) {
+      if (/\bglobalThis\b/.test(line)) offenders.push(`${rel}: ${line.trim()}`);
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `extracted renderers must receive the drawing surface as a parameter ` +
+      `instead of reaching for globals:\n${offenders.join('\n')}`,
+  );
+});
+
+test('geometry-dependent renderers are not extracted yet', () => {
+  /* Honesty guard. Only renderers that were VERIFIED to write no shared state
+   * have been moved. Functions like `render` and `drawTrails` still read
+   * geometry and shared collections, so they stay in the legacy file until their
+   * dependencies are narrowed too.
+   *
+   * If someone moves one of those without doing that work, this fails — which is
+   * the intended outcome, because a half-moved renderer would silently depend on
+   * boot order.
+   */
+  const renderDir = join(APP, 'render');
+  const extracted = readdirSync(renderDir)
+    .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+    .map((f) => f.replace(/\.ts$/, ''));
+
+  // Only these are cleared for extraction; add to this list deliberately.
+  const approved = new Set(['surface', 'particles']);
+  const unapproved = extracted.filter((f) => !approved.has(f));
+  assert.deepEqual(
+    unapproved,
+    [],
+    `these renderers were extracted without being cleared: ${unapproved.join(', ')}. ` +
+      `Check first that they write no shared state.`,
+  );
+});

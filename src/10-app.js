@@ -11462,6 +11462,16 @@ function explodeBlackHole(B){
   blastAt(cx,cy,BLAST_R);   // blast wave: shatter wholes, vaporize letters, blow shards
 }
 function drawParticles(){
+  /* ★★2026-10（阶段 C）：**第一个真正切出去的渲染器**（`app/render/particles.ts`）。
+   *  选它是因为它是 17 个「只读画布、不写共享状态」的绘制函数里最小的一个（13 行）——
+   *  如果这个缝在这里都合不上，那 `drawSpring`/`drawFieldE` 更不用谈。
+   *  变化只有一处：两个依赖从**自由变量**变成**参数**
+   *    before:  drawParticles()          读 particles 和 cvx
+   *    after:   drawParticles(surface, particles)
+   *  绘制代码本身**逐字符未动**，因为这次提取的验收标准就是画布输出不变。
+   *  ⚠ 模块缺失时回退到原实现，保证单独 eval 本文件时也能工作。 */
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawParticles){_R.drawParticles(cvx,particles);return;}
   for(var i=0;i<particles.length;i++){
     var p=particles[i];
     cvx.fillStyle=p.hot?('rgba(255,224,150,'+p.alpha+')'):('rgba(38,34,28,'+p.alpha+')');

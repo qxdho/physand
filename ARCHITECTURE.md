@@ -178,7 +178,7 @@ shape-stretch-width  shape-stretch-identity  shape-fixed-holds
 spring-soft-sag  spring-stiff-sag  rod-length-changed
 ```
 
-另有 **127 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
+另有 **137 条单元测试**覆盖新模块的不变量（参数注册表、模块桥的发布语义）：
 
 ```bash
 npm run test:unit # 新模块单测（最快，先跑）
@@ -478,12 +478,43 @@ if (grab.kind === 'body' && grab.obj === B) { ... }   // 物理核心里出现 9
 **新增守卫**：模块代码不得直接读画布几何全局（必须走 `core/viewport.ts`）。
 已验证非空转 —— 往 `drag-facade.ts` 注入一行 `W / 2` 立刻被抓出。
 
+#### 第三个粘连源：`cvx`（画布 2D 上下文）
+
+继续钻第三层，发现 `cvx` **349 处引用，但只在一处被赋值**（`cvx = cv.getContext('2d')`）。
+和几何一样是「一处写、到处读」的不对称 —— 又一个可安全收口的缝。
+
+按证据筛出候选：**17 个 `draw*`/`render*` 函数使用 `cvx`，且没有一个写共享状态。**
+它们的依赖只有画布 API、两个纯函数（`rgba`/`clamp`）和传入的参数。
+
+⇒ 新建 `app/render/`，先把**最小**的那个（`drawParticles`，13 行）真正切出去。
+
+**变化只有一处**：两个依赖从**自由变量**变成**参数**
+
+```
+before:  drawParticles()            读 particles 和 cvx
+after:   drawParticles(surface, particles)
+```
+
+绘制代码**逐字符未动** —— 因为这次提取的验收标准就是**画布输出不变**。
+
+**等价性证据（最强的一条）**：用固定粒子集走确定性渲染路径，对画布取像素做哈希 ——
+两版**哈希相同**（`-2035845083`）、**着色像素数相同**（258）。
+
+**并且验证了模块路径真的在跑**：用探针替换模块实现后，legacy 的 `drawParticles` 调用被拦截
+⇒ 确实是**委托**，不是静默回退到旧代码。
+
 #### 下一步（阶段 C 路线）
 
-1. ✅ 几何收口（本轮）
-2. ⬜ 按证据切出只依赖几何的函数组 → `render/`
-3. ⬜ `bodies` 所有权迁移 → `physics/`（需单独设计生命周期）
-4. ⬜ 真 `import` 替换模块桥，删除 `legacy-globals.generated.ts`
+1. ✅ 几何收口
+2. 🚧 **`render/` 边界建立 + 首个渲染器切出**（本轮）
+3. ⬜ 继续切其余 16 个「纯绘制」函数（`drawSpring`/`drawRope`/`drawHinge`/…）
+4. ⬜ `bodies` 所有权迁移 → `physics/`（需单独设计生命周期）
+5. ⬜ 真 `import` 替换模块桥，删除 `legacy-globals.generated.ts`
+
+> **一条刻意的保守纪律**：`render/` 里只批准了**已验证「不写共享状态」**的函数。
+> `render`、`drawTrails` 这些仍读几何与共享集合，**继续留在遗留文件里**，
+> 直到它们的依赖也被收窄。有一条守卫专门拦「未批准的提取」——
+> 半搬走的渲染器会静默依赖启动顺序，而那正是最难查的一类 bug。
 
 ### ⬜ 阶段 D —— 可扩展性与产品功能
 

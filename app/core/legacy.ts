@@ -325,3 +325,20 @@ export function constant(name: string, fallback: number): number {
 export function setGlobal(name: string, value: number): void {
   (globalThis as unknown as Record<string, unknown>)[name] = value;
 }
+
+/**
+ * The canvas 2D context (`cvx`).
+ *
+ * Referenced 349 times in the legacy file and assigned in exactly one place
+ * (`cvx = cv.getContext('2d')`). Exposed here so the extracted renderers can
+ * obtain the drawing surface without reading a global directly — the architecture
+ * guard requires reads to funnel through this module.
+ *
+ * Returns undefined before the canvas exists or when 2D is unavailable; the
+ * legacy boot path already tolerates that (`ctx2d` is built inside a try/catch
+ * for the same reason), so callers must handle absence rather than assume.
+ */
+export function drawContext(): Record<string, unknown> | undefined {
+  const v = (globalThis as unknown as Record<string, unknown>).cvx;
+  return v && typeof v === 'object' ? (v as Record<string, unknown>) : undefined;
+}
