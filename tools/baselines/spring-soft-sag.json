@@ -1,0 +1,150 @@
+{
+ "id": "spring-soft-sag",
+ "doc": "A soft spring (low k) must let the hanging mass sag far. Pairs with spring-stiff-sag to prove the k parameter actually reaches the solver.",
+ "snaps": [
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 566.766,
+     "vx": 0,
+     "vy": -261.577,
+     "a": 0,
+     "w": 0,
+     "m": 2.339
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 375.383,
+     "vx": 0,
+     "vy": 0,
+     "a": 1.571,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 332.766,
+     "ks": 30
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 495.581,
+     "vx": 0,
+     "vy": -250.974,
+     "a": 0,
+     "w": 0,
+     "m": 2.339
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 339.79,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 261.581,
+     "ks": 30
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 520.493,
+     "vx": 0,
+     "vy": -50.581,
+     "a": 0,
+     "w": 0,
+     "m": 2.339
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 352.246,
+     "vx": 0,
+     "vy": 0,
+     "a": 1.571,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 286.493,
+     "ks": 30
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

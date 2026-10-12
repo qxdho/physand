@@ -80,6 +80,22 @@ window.__T = (function(){
     if(typeof refresh==='function') refresh(B);
   }
 
+  /* Set any parameter by id.
+   *
+   * Registry-backed ids exist in the Vite build; the frozen legacy build may
+   * lack some entries. Fall back to a direct field write plus refresh so both
+   * targets stay runnable — see setAxisScale above for the same reasoning. The
+   * fallbacks below mirror what the legacy applyParam branches did. */
+  function setParam(B, specId, value){
+    var spec = (typeof PARAM_DEFS!=='undefined') ? PARAM_DEFS[specId] : null;
+    if(spec && typeof applyParam==='function'){ applyParam(B, spec, value); return; }
+    if(specId==='sk'){ B.ks = value; }
+    else if(specId==='rodlen' && typeof setRodLen==='function'){ setRodLen(B, value, true); }
+    else if(specId==='slen' && typeof springSetLen==='function'){ springSetLen(B, value); }
+    else if(specId==='sdamp'){ B.damp = value; }
+    else { B[specId] = value; if(typeof refresh==='function') refresh(B); }
+  }
+
   /* Pin / unpin a body. Mirrors the legacy menu toggle exactly:
    * body flag + Matter setStatic + wake. */
   function setFixed(B, on){
@@ -153,7 +169,7 @@ window.__T = (function(){
     return out;
   }
 
-  return {step:step, snap:snap, setAxisScale:setAxisScale, setFixed:setFixed};
+  return {step:step, snap:snap, setAxisScale:setAxisScale, setFixed:setFixed, setParam:setParam};
 })();
 
 /* Scenario setup bodies are compiled with \`new Function('T', ...)\`, so they can
@@ -162,6 +178,7 @@ window.__T = (function(){
  * factory functions (makeGround, makeRod, ...) are already reached. */
 window.setAxisScale = window.__T.setAxisScale;
 window.setFixed = window.__T.setFixed;
+window.setParam = window.__T.setParam;
 `;
 
 /**

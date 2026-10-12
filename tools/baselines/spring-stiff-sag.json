@@ -1,0 +1,150 @@
+{
+ "id": "spring-stiff-sag",
+ "doc": "A stiff spring (high k) must barely sag under the same mass. The contrast with spring-soft-sag is the regression signal for the k write path.",
+ "snaps": [
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 419.937,
+     "vx": 0,
+     "vy": -37.407,
+     "a": 0,
+     "w": 0,
+     "m": 2.339
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 301.969,
+     "vx": 0,
+     "vy": 0,
+     "a": 1.571,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 185.937,
+     "ks": 500
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 420.167,
+     "vx": 0,
+     "vy": -22.712,
+     "a": 0,
+     "w": 0,
+     "m": 2.339
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 302.084,
+     "vx": 0,
+     "vy": 0,
+     "a": 1.571,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 186.167,
+     "ks": 500
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 3,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 200,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "W",
+     "dead": 0,
+     "x": 420,
+     "y": 420.24,
+     "vx": 0,
+     "vy": -26.827,
+     "a": 0,
+     "w": 0,
+     "m": 2.339
+    },
+    {
+     "i": 2,
+     "kind": "S",
+     "dead": 0,
+     "x": 420,
+     "y": 302.12,
+     "vx": 0,
+     "vy": 0,
+     "a": 1.571,
+     "w": 0,
+     "m": "Infinity",
+     "len": 181,
+     "cur": 186.24,
+     "ks": 500
+    }
+   ],
+   "fl": []
+  }
+ ]
+}

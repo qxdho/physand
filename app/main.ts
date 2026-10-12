@@ -33,10 +33,11 @@ import { params } from './core/param-registry';
 import { bridgeParamDefs } from './core/panel-bridge';
 import { PANEL_HOOK_EPILOGUE, PARAM_HOOKS_KEY } from './core/panel-hooks';
 
-// Side-effect import: this module performs the `params.register(...)` calls.
-// Without it the registry is EMPTY at boot, the hook claims no ids, and the
+// Side-effect imports: these modules perform the `params.register(...)` calls.
+// Without them the registry is EMPTY at boot, the hook claims no ids, and the
 // panel silently keeps its legacy behaviour — with no error anywhere.
 import './params/w-body';
+import './params/devices';
 
 /**
  * Inject the static markup. The legacy page was a flat list of <div>s directly

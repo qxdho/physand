@@ -107,7 +107,7 @@ npm run test:both    # 回归必须全绿
 
 ### 回归测试
 
-14 条场景覆盖物理核心。**任何改动都不能让它们变红**：
+17 条场景覆盖物理核心。**任何改动都不能让它们变红**：
 
 ```
 empty-steady           启动/全局初始化：不该有东西自己出现或移动
@@ -124,9 +124,12 @@ shape-resize-identity  放大再还原必须精确回到原尺寸（防累积放
 shape-stretch-width    拉宽后碰撞体随之变宽（防 hull 缓存没作废）★
 shape-stretch-identity 两轴拉伸再还原必须精确回到原尺寸 ★
 shape-fixed-holds      设为固定后必须悬停不落 ★
+spring-soft-sag        软弹簧（k 小）必须明显下垂 ★
+spring-stiff-sag       硬弹簧（k 大）必须几乎不下垂 ★
+rod-length-changed     改杆长必须真的改变两端几何 ★
 ```
 
-★ = 2026-10 新增。另有 40 条单元测试覆盖新模块，跑 `npm run test:unit`。
+★ = 2026-10 新增。另有 55 条单元测试覆盖新模块，跑 `npm run test:unit`。
 
 ★ = 2026-10 新增。它们补上了一个**严重盲区**：此前在 `rodSyncAnchors`
 （全项目最大的函数）开头注入 `if(1)return false;`，测试**依然 7/7 全绿** ——

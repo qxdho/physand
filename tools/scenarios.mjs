@@ -291,4 +291,75 @@ export const SCENARIOS = [
     },
     steps: [{ n: 60 }, { n: 120 }],
   },
+
+  /* ------------------------------------------------------------------------
+   * DEVICE PARAMETERS
+   *
+   * The device knobs (spring k / L0 / damping, rod length / mass, ground length,
+   * belt speed) went through the same registry migration as the shape knobs.
+   * These scenarios pin the OBSERVABLE physics, not the plumbing: a stiffness
+   * change must change how far a hanging mass sags, and a rod-length change must
+   * change the rod's actual geometry.
+   *
+   * Both matter because the legacy write paths were not plain field writes —
+   * they must go through choke points that rebuild the collision mirror
+   * (`springSetLen`, `setRodLen`). Writing the field alone produced bodies that
+   * were "visible but not touchable" (legacy R98-1 measured the rod's collision
+   * plate stuck at its original width).
+   * ------------------------------------------------------------------------ */
+
+  {
+    id: 'spring-soft-sag',
+    doc: 'A soft spring (low k) must let the hanging mass sag far. Pairs with ' +
+         'spring-stiff-sag to prove the k parameter actually reaches the solver.',
+    setup: () => {
+      makeGround(420, 200, 200);
+      const ball = mkBoundary(
+        Array.from({ length: 16 }, (_, i) => {
+          const a = (i / 16) * Math.PI * 2;
+          return [420 + Math.cos(a) * 25, 420 + Math.sin(a) * 25];
+        }),
+        { shape: 'circle', rad: 25, closed: true },
+      );
+      const spr = makeSpring(420, 209, 420, 390);
+      springTryAnchor(spr);
+      setParam(spr, 'sk', 30);      // soft
+      return true;
+    },
+    steps: [{ n: 60 }, { n: 90 }, { n: 120 }],
+  },
+
+  {
+    id: 'spring-stiff-sag',
+    doc: 'A stiff spring (high k) must barely sag under the same mass. The contrast ' +
+         'with spring-soft-sag is the regression signal for the k write path.',
+    setup: () => {
+      makeGround(420, 200, 200);
+      const ball = mkBoundary(
+        Array.from({ length: 16 }, (_, i) => {
+          const a = (i / 16) * Math.PI * 2;
+          return [420 + Math.cos(a) * 25, 420 + Math.sin(a) * 25];
+        }),
+        { shape: 'circle', rad: 25, closed: true },
+      );
+      const spr = makeSpring(420, 209, 420, 390);
+      springTryAnchor(spr);
+      setParam(spr, 'sk', 500);     // stiff
+      return true;
+    },
+    steps: [{ n: 60 }, { n: 90 }, { n: 120 }],
+  },
+
+  {
+    id: 'rod-length-changed',
+    doc: 'Changing rod length must move the actual endpoints (and rebuild the collider). ' +
+         'Covers setRodLen as the choke point for rod geometry.',
+    setup: () => {
+      makeGround(640, 720, 1200);
+      const rod = makeRod(600, 300, 0, 0);
+      setParam(rod, 'rodlen', 300);   // 170 -> 300
+      return true;
+    },
+    steps: [{ n: 60 }, { n: 120 }],
+  },
 ];

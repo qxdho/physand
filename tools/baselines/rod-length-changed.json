@@ -1,0 +1,72 @@
+{
+ "id": "rod-length-changed",
+ "doc": "Changing rod length must move the actual endpoints (and rebuild the collider). Covers setRodLen as the choke point for rod geometry.",
+ "snaps": [
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 1200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "T",
+     "dead": 0,
+     "x": 600,
+     "y": 300,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": null,
+     "len": 300
+    }
+   ],
+   "fl": []
+  },
+  {
+   "n": 2,
+   "nfl": 0,
+   "bs": [
+    {
+     "i": 0,
+     "kind": "W",
+     "dead": 0,
+     "x": 640,
+     "y": 631,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": 0,
+     "m": "Infinity",
+     "len": 1200,
+     "fx": 1
+    },
+    {
+     "i": 1,
+     "kind": "T",
+     "dead": 0,
+     "x": 600,
+     "y": 300,
+     "vx": 0,
+     "vy": 0,
+     "a": 0,
+     "w": null,
+     "len": 300
+    }
+   ],
+   "fl": []
+  }
+ ]
+}
