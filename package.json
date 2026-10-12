@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
+    "test:unit": "node --test app/**/*.test.ts",
 
     "gen": "node tools/build.mjs && node tools/extract-legacy.mjs && node tools/gen-globals.mjs",
     "gen:check": "node tools/build.mjs --check && node tools/extract-legacy.mjs --check && node tools/gen-globals.mjs --check",

@@ -22,6 +22,11 @@
     "allowJs": true,
     "checkJs": false,
 
+    /* Node's test runner imports the .ts file directly (no build step for
+       tests), so relative imports must be allowed to carry the extension. */
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+
     "baseUrl": ".",
     "paths": {
       "@/*": ["app/*"]

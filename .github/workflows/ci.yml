@@ -36,6 +36,14 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Fast unit tests for the new modules (param registry, etc). These cover
+      # invariants that the replay scenarios cannot see — e.g. that a parameter
+      # which is VISIBLE in the panel is also readable and writable, which is
+      # the bug class that produced three separate "I changed it and nothing
+      # happened" reports in the legacy app.
+      - name: Unit tests
+        run: npm run test:unit
+
       - name: Build (Vite app)
         run: npm run build
 
