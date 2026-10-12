@@ -12787,6 +12787,8 @@ function tickOrbs(dt){
 // 其中圆的 3px 是有意留的内缩；对比旧版 100~186px。
 // 世界坐标约定 world = pos + R(th)·local，与 distToHost / springAnchorOffset 一致。
 function hostInsideInk(H,px,py){
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.hostInsideInk)return _R.hostInsideInk(H,px,py);
   var p=H.pts;if(!p||p.length<3)return false;
   var c=Math.cos(H.th||0),s=Math.sin(H.th||0),ins=false;
   for(var i=0,j=p.length-1;i<p.length;j=i++){
@@ -12799,6 +12801,8 @@ function hostInsideInk(H,px,py){
 }
 // 从 (px,py) 沿 (ux,uy) 走出闭合图形的最小正距离（射线 × 各边求交）
 function hostExitDist(H,px,py,ux,uy){
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.hostExitDist)return _R.hostExitDist(H,px,py,ux,uy);
   var p=H.pts;if(!p||p.length<3)return 0;
   var c=Math.cos(H.th||0),s=Math.sin(H.th||0),best=1e9;
   for(var i=0,j=p.length-1;i<p.length;j=i++){
@@ -12816,6 +12820,11 @@ function hostExitDist(H,px,py,ux,uy){
 // 拴住的一端，线圈要从锚点朝**弹簧那一侧**退多少才刚好贴住宿主表面。
 // (ux,uy) 就是「朝弹簧」的方向 —— 与 drawSpring 的两处调用一致（e0 端传 +u、e1 端传 -u）。
 function springHostSurfDist(H,px,py,ux,uy){
+  /* ★★2026-10（阶段 C）：锚点几何是**纯几何**（无画布、无全局），已切到
+   *  `app/render/anchor-geometry.ts`。它原本混在绘制代码里，只因弹簧渲染器是第一个调用方。
+   *  先搬它，`drawSpring` 才可能跟着搬 —— 函数不能调用一个没跟它一起搬走的东西。 */
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.springHostSurfDist)return _R.springHostSurfDist(H,px,py,ux,uy);
   if(!H)return 0;
   var mx=px-H.x,my=py-H.y,m2=mx*mx+my*my;
   if(H.rad){                                              // 圆：|m + u·t| = R 的正根
@@ -12863,6 +12872,11 @@ function drawRodPlank(B){
   }
 }
 function drawSpring(B){
+  /* ★★2026-10（阶段 C）：弹簧渲染器已切到 `app/render/spring.ts`。
+   *  ⚠ R132-8b 的**渲染期压缩**语义必须保住：压缩只作用于本函数内的局部端点副本，
+   *  绝不回写 e0/e1 —— 遗留注释记录了「压缩一旦参与几何，判据基准随状态漂移 ⇒ 正反馈」。 */
+  var _R=(typeof globalThis!=='undefined')?globalThis.__renderModules:null;
+  if(_R&&_R.drawSpring){_R.drawSpring(cvx,B);return;}
   var x0=B.e0.x,y0=B.e0.y,x1=B.e1.x,y1=B.e1.y;
   var dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L,px=-uy,py=ux;
   /* ★★R132-8b（用户 2026-10-01：「物体撞上时也像是撞到弹簧一样，弹簧被压缩」）：

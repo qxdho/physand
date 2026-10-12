@@ -266,24 +266,60 @@ test('module code reads canvas geometry through the viewport module, not globals
     'core/legacy.ts', // reads the globals on the module's behalf
     'core/viewport.ts', // owns the geometry surface
   ]);
-  const geometry = /\b(W|H|groundY|PX_PER_M|BND_INK|CEL_INSET|BH_REACH)\b/;
-  // `W`/`H` as identifiers are only meaningful when they appear bare, not as a
-  // property name or inside a longer word.
-  const bareGeometry = /(?<![.\w])(W|H|groundY|PX_PER_M|BND_INK|CEL_INSET|BH_REACH)(?![\w(])/;
+  /* The geometry globals are all SHORT, which makes a regex-only check prone to
+   * false positives: \`H\` is a canvas height AND a perfectly reasonable
+   * parameter name for a host body (see render/anchor-geometry.ts). What matters
+   * is whether the identifier is a FREE variable or locally bound.
+   *
+   * So the check first collects every name the file binds — parameters, \`var\`,
+   * \`let\`, \`const\`, function declarations, imports — and only flags
+   * occurrences of a geometry name that are NOT among them.
+   */
+  const geometryNames = ['W', 'H', 'groundY', 'PX_PER_M', 'BND_INK', 'CEL_INSET', 'BH_REACH'];
+  const bareGeometry = new RegExp(
+    '\\b(' + geometryNames.join('|') + ')\\b',
+  );
+  const notProperty = /(?<![.\w])(W|H|groundY|PX_PER_M|BND_INK|CEL_INSET|BH_REACH)(?![\w(])/;
+
+  /** Names bound anywhere in the file: params, locals, functions, imports. */
+  function boundNames(code: string): Set<string> {
+    const bound = new Set<string>();
+    for (const m of code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) bound.add(m[1]!);
+    for (const m of code.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)/g)) bound.add(m[1]!);
+    for (const m of code.matchAll(/\bimport\s+([\s\S]*?)\bfrom\b/g)) {
+      for (const n of m[1]!.matchAll(/([A-Za-z_$][\w$]*)/g)) bound.add(n[1]!);
+    }
+    // Function parameters, including destructured-ish simple lists.
+    for (const m of code.matchAll(/\(([^()]*)\)\s*(?::[^{;=]*)?=>/g)) {
+      for (const n of m[1]!.matchAll(/([A-Za-z_$][\w$]*)/g)) bound.add(n[1]!);
+    }
+    for (const m of code.matchAll(/function[^(]*\(([^)]*)\)/g)) {
+      for (const n of m[1]!.matchAll(/([A-Za-z_$][\w$]*)/g)) bound.add(n[1]!);
+    }
+    return bound;
+  }
 
   const offenders: string[] = [];
   for (const { rel, text } of appSources()) {
     if (allowed.has(rel)) continue;
     const code = stripCommentsAndStrings(text);
+    const bound = boundNames(code);
     for (const line of code.split('\n')) {
-      // Only flag lines that READ geometry; declaring a local named W is fine
-      // but shadowing a canvas dimension inside app code is exactly the bug.
-      if (bareGeometry.test(line) && !/^\s*(import|export)\b/.test(line)) {
+      /* Skip only lines that are PURELY an import/export clause. An earlier
+       * version skipped every line STARTING with "export", which silently
+       * exempted \`export function f(){ return W; }\` — a real free read. */
+      if (/^\s*import\b/.test(line)) continue;
+      if (/^\s*export\s+(type\s+)?[{*]/.test(line)) continue;
+      if (/^\s*export\s+type\b/.test(line)) continue;
+      const hits = [...line.matchAll(new RegExp(notProperty.source, 'g'))];
+      for (const h of hits) {
+        const name = h[1]!;
+        if (bound.has(name)) continue; // locally bound: a parameter, not the global
+        if (!bareGeometry.test(name)) continue;
         offenders.push(`${rel}: ${line.trim()}`);
       }
     }
   }
-  void geometry;
 
   assert.deepEqual(
     offenders,
@@ -357,8 +393,10 @@ test('geometry-dependent renderers are not extracted yet', () => {
   /* Data modules are not renderers: device-spec.ts holds constants and no
    * drawing code at all, so it is exempt from the cleared-for-extraction
    * question rather than being approved through it. */
-  const dataOnly = new Set(['device-spec']);
-  const approved = new Set(['surface', 'particles', 'devices', 'field', 'bodies']);
+  // Pure geometry and data have no drawing code, so the renderer-clearance
+  // question does not apply to them.
+  const dataOnly = new Set(['device-spec', 'anchor-geometry']);
+  const approved = new Set(['surface', 'particles', 'devices', 'field', 'bodies', 'spring']);
   const unapproved = extracted.filter((f) => !approved.has(f) && !dataOnly.has(f));
   assert.deepEqual(
     unapproved,

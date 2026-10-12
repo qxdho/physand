@@ -46,6 +46,8 @@ import { drawBlackHole, drawHinge, drawRope, drawSnapMarker } from './render/dev
 import { boxExtentAlong, drawFieldDots, drawRodPlank } from './render/field';
 import { drawBeltBody, drawGroundBody } from './render/bodies';
 import { BOUNDARY_INK, beltSpec, groundSpec } from './render/device-spec';
+import { drawSpring } from './render/spring';
+import { hostExitDist, hostInsideInk, springHostSurfDist } from './render/anchor-geometry';
 
 // Side-effect imports: these modules perform the `params.register(...)` calls.
 // Without them the registry is EMPTY at boot, the hook claims no ids, and the
@@ -191,6 +193,10 @@ function boot(): void {
     groundSpec: groundSpec(),
     beltSpec: beltSpec(),
     boundaryInk: BOUNDARY_INK,
+    drawSpring,
+    springHostSurfDist,
+    hostInsideInk,
+    hostExitDist,
   };
   evaluateAsClassicScript(
     appSource,
